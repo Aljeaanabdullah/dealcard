@@ -1,8 +1,8 @@
 // محرك اللعب: (حالة، حركة) ← حالة جديدة، مع رفض الحركات المخالفة.
-// المصدر: prd.md الأقسام 5.1 إلى 5.8، و plan.md المراحل 2 إلى 4.
+// المصدر: prd.md الأقسام 5.1 إلى 5.8، و plan.md المراحل 2 إلى 5.
 // دوال خالصة: بدون واجهة، بدون شبكة، بدون وقت النظام، وبدون عشوائية غير مبذورة.
 
-import { ACTIONS, RENTS, type ActionDef, type Card, type RentDef } from '../data/cards';
+import { ACTIONS, RENTS, type ActionDef, type ActionId, type Card, type RentDef } from '../data/cards';
 import { COLORS, type ColorId } from '../data/colors';
 import {
   DRAW_PER_TURN,
@@ -11,12 +11,33 @@ import {
   MAX_PLAYS_PER_TURN,
   PLAYER_COUNT,
 } from '../data/rules';
-import { isValidPayment, rentFor, rentForAllCompleteSets, suggestPayment, totalPayable } from './payment';
-import { createRng, nextSeed, shuffle } from './rng';
+import {
+  checkWin,
+  detachBrokenBuildings,
+  drawCards,
+  getPlayer,
+  isOtherSeat,
+  otherSeats,
+  withPlayer,
+} from './core';
+import { applyEffect, CHOICE_ACTIONS, effectOptions, SWAP_ACTIONS } from './effects';
+import { isValidPayment, rentFor, rentForAllCompleteSets, suggestPayment } from './payment';
+import { done, fail, type MoveError, type MoveResult } from './result';
 import { completeColors, isSetComplete } from './sets';
-import type { Debt, GameState, PlacedProperty, PlayerState } from './state';
+import type {
+  Effect,
+  EffectParams,
+  GameState,
+  PendingPayment,
+  PlayerState,
+  ResponseKind,
+  ResponseWindow,
+  StandingResponse,
+} from './state';
 
-/** حرق كرت من يد لاعب بدون رؤية: المقعد وترتيب الكرت باليد. */
+export type { MoveError, MoveResult } from './result';
+
+/** اختيار كرت من يد لاعب بدون رؤية: المقعد وترتيب الكرت باليد. */
 export interface BlindPick {
   readonly seat: number;
   readonly handIndex: number;
@@ -26,6 +47,8 @@ export interface PlayActionMove {
   readonly type: 'playAction';
   readonly seat: number;
   readonly cardId: string;
+  /** لكرت "طب وتخير": الأكشن اللي يصيره */
+  readonly asAction?: ActionId;
   /** اللاعب المستهدف */
   readonly targetSeat?: number;
   /** عقارات (أو جيكر) عند المستهدف */
@@ -40,6 +63,27 @@ export interface PlayActionMove {
   readonly handIndex?: number;
   /** الكروت المحروقة (لكرت "مخالفه") */
   readonly burns?: readonly BlindPick[];
+}
+
+/** اختيار صاحب "حيور": وش ياخذ من صاحب الأكشن. */
+export interface BounceChoice {
+  readonly targetCardIds?: readonly string[];
+  readonly color?: ColorId;
+  /** ترتيب الكرت بيد صاحب الأكشن (ورثتك، مخالفه) */
+  readonly handIndex?: number;
+}
+
+export interface RespondMove {
+  readonly type: 'respond';
+  readonly seat: number;
+  /** كرت الرد. بدون كرت = "ما أرد". */
+  readonly cardId?: string;
+  /** لكرت "طب وتخير": كرت الرد اللي يصيره */
+  readonly as?: ResponseKind;
+  /** لكرت "ادفعلي ايجاري": اللاعب اللي يدفع عني */
+  readonly payerSeat?: number;
+  /** لكرت "حيور" ضد السرقة: وش آخذ من صاحب الأكشن */
+  readonly bounce?: BounceChoice;
 }
 
 export type Move =
@@ -62,113 +106,19 @@ export type Move =
   | { readonly type: 'burnAction'; readonly seat: number; readonly cardId: string }
   | { readonly type: 'playBuilding'; readonly seat: number; readonly cardId: string; readonly color: ColorId }
   | { readonly type: 'placeBuilding'; readonly seat: number; readonly cardId: string; readonly color: ColorId }
+  | RespondMove
   | { readonly type: 'pay'; readonly seat: number; readonly cardIds: readonly string[] }
   | { readonly type: 'discard'; readonly seat: number; readonly cardId: string }
   | { readonly type: 'endTurn'; readonly seat: number };
 
-export type MoveError =
-  | 'gameOver'
-  | 'notYourTurn'
-  | 'alreadyDrew'
-  | 'mustDrawFirst'
-  | 'noPlaysLeft'
-  | 'discarding'
-  | 'cardNotInHand'
-  | 'wrongCardKind'
-  | 'jokerNotOnTable'
-  | 'sameColor'
-  | 'handNotOverLimit'
-  | 'handOverLimit'
-  | 'paymentPending'
-  | 'noPaymentDue'
-  | 'invalidPayment'
-  | 'invalidTarget'
-  | 'invalidCard'
-  | 'colorRequired'
-  | 'colorNotAllowed'
-  | 'noPropertyInColor'
-  | 'setNotComplete'
-  | 'buildingNotLoose'
-  | 'noCompleteSet'
-  | 'unsupportedAction';
+const RESPONSE_KINDS: readonly ResponseKind[] = ['malekAmal', 'hayyour', 'fazaah', 'maTshoofShar', 'edfaaliEjari'];
 
-export type MoveResult =
-  | { readonly ok: true; readonly state: GameState }
-  | { readonly ok: false; readonly error: MoveError };
-
-function fail(error: MoveError): MoveResult {
-  return { ok: false, error };
-}
-
-function done(state: GameState): MoveResult {
-  return { ok: true, state };
-}
-
-function getPlayer(state: GameState, seat: number): PlayerState {
-  const player = state.players[seat];
-  if (!player) {
-    throw new Error(`مقعد غير موجود: ${seat}`);
-  }
-  return player;
-}
-
-function withPlayer(state: GameState, player: PlayerState): GameState {
-  return { ...state, players: state.players.map((p) => (p.seat === player.seat ? player : p)) };
+function isResponseKind(value: string | undefined): value is ResponseKind {
+  return value !== undefined && (RESPONSE_KINDS as readonly string[]).includes(value);
 }
 
 function countPlay(state: GameState): GameState {
   return { ...state, turn: { ...state.turn, playsUsed: state.turn.playsUsed + 1 } };
-}
-
-function otherSeats(seat: number): number[] {
-  const seats: number[] = [];
-  for (let s = 0; s < PLAYER_COUNT; s++) {
-    if (s !== seat) seats.push(s);
-  }
-  return seats;
-}
-
-function isOtherSeat(seat: number, target: number | undefined): target is number {
-  return target !== undefined && Number.isInteger(target) && target >= 0 && target < PLAYER_COUNT && target !== seat;
-}
-
-function isReal(placed: PlacedProperty): boolean {
-  return placed.card.kind === 'property';
-}
-
-/** عقارات حقيقية مو داخل طقم كامل: تنسرق وتتبدل بالكروت العادية. */
-function stealableProperties(player: PlayerState): PlacedProperty[] {
-  return player.properties.filter((p) => isReal(p) && !isSetComplete(player.properties, p.color));
-}
-
-/** جيكرات مو داخل طقم كامل: تنسرق بـ"بوق الجيكر". */
-function stealableJokers(player: PlayerState): PlacedProperty[] {
-  return player.properties.filter((p) => p.card.kind === 'joker' && !isSetComplete(player.properties, p.color));
-}
-
-/** عقارات حقيقية داخل طقم كامل: تنأخذ بـ"ازاله". */
-function removableFromCompleteSets(player: PlayerState): PlacedProperty[] {
-  return player.properties.filter((p) => isReal(p) && isSetComplete(player.properties, p.color));
-}
-
-/** إذا انكسر الطقم، مبانيه تصير بدون طقم (بدون تأثير) عند صاحبها. */
-function detachBrokenBuildings(player: PlayerState): PlayerState {
-  return {
-    ...player,
-    buildings: player.buildings.map((b) =>
-      b.color !== null && !isSetComplete(player.properties, b.color) ? { card: b.card, color: null } : b,
-    ),
-  };
-}
-
-/** يعلن الفائز: أول لاعب من القائمة كمّل العدد المطلوب من الأطقم الكاملة المختلفة. */
-function checkWin(state: GameState, ...seats: number[]): GameState {
-  for (const seat of seats) {
-    if (completeColors(getPlayer(state, seat).properties).length >= state.winTarget) {
-      return { ...state, winner: seat };
-    }
-  }
-  return state;
 }
 
 /** فحوصات مشتركة لأي لعب كرت ينحسب من كروت الدور. */
@@ -179,56 +129,166 @@ function checkCanPlay(state: GameState): MoveError | null {
   return null;
 }
 
-/** يبدأ دفع معلّق. اللي ما عنده شي يدفع فيه ما يدفع، فما ينضاف. */
-function startPayment(state: GameState, to: number, debts: readonly Debt[]): GameState {
-  const real = debts.filter((d) => d.amount > 0 && totalPayable(getPlayer(state, d.from)) > 0);
-  return { ...state, pending: real.length > 0 ? { to, debts: real } : null };
+// ===================== نوافذ الرد =====================
+
+/** كروت الرد المسموحة للاعب بنافذة معيّنة حسب دوره فيها. */
+function allowedResponses(window: ResponseWindow, seat: number): ResponseKind[] {
+  const { effect } = window;
+  if (seat === effect.actor) return [];
+  if (seat === effect.target) {
+    return effect.isRent ? ['malekAmal', 'hayyour', 'maTshoofShar', 'edfaaliEjari'] : ['malekAmal', 'hayyour'];
+  }
+  // لاعب ثالث: يفزع للمستهدف.
+  return ['fazaah'];
 }
 
-/** يسحب عدد من الكروت ليد اللاعب. إذا خلصت كومة السحب تنخلط النار ويكمل السحب. */
-function drawCards(state: GameState, seat: number, wanted: number): GameState {
-  let drawPile = state.drawPile.slice();
-  let firePile = state.firePile.slice();
-  let seed = state.seed;
-  const drawn: Card[] = [];
+/** هل بيد اللاعب كرت ينلعب كواحد من هالردود؟ ("طب وتخير" يصير أي رد) */
+function holdsResponse(player: PlayerState, kinds: readonly ResponseKind[]): boolean {
+  if (kinds.length === 0) return false;
+  return player.hand.some(
+    (c) => c.kind === 'action' && (c.action === 'tebWetkhayyar' || (kinds as readonly string[]).includes(c.action)),
+  );
+}
 
-  while (drawn.length < wanted) {
-    if (drawPile.length === 0) {
-      if (firePile.length === 0) break;
-      const rng = createRng(seed);
-      drawPile = shuffle(firePile, rng);
-      firePile = [];
-      seed = nextSeed(rng);
+/** اللاعبين اللي نستنى ردهم بجولة الدفاع: عندهم كرت رد وما قالوا "ما أرد". */
+function defenders(state: GameState, window: ResponseWindow): number[] {
+  return state.players
+    .map((p) => p.seat)
+    .filter(
+      (seat) => !window.passed.includes(seat) && holdsResponse(getPlayer(state, seat), allowedResponses(window, seat)),
+    );
+}
+
+function actorCanCounter(state: GameState, actor: number): boolean {
+  return holdsResponse(getPlayer(state, actor), ['malekAmal']);
+}
+
+/** ينفذ التأثير، وإذا صار ما ينفذ (تغيّرت الحالة) يطوف بدون أثر. */
+function applyOrFizzle(state: GameState, effect: Effect): GameState {
+  const result = applyEffect(state, effect);
+  return result.ok ? result.state : state;
+}
+
+/** يمشّي التأثيرات المنتظرة: يفتح نافذة رد إذا فيه أحد يقدر يرد، وإلا ينفذ مباشرة. */
+function advance(state: GameState): GameState {
+  let next = state;
+  while (next.winner === null && next.response === null && next.queue.length > 0) {
+    const [effect, ...rest] = next.queue;
+    if (!effect) break;
+    next = { ...next, queue: rest };
+    const window: ResponseWindow = { effect, standing: null, awaiting: 'defense', passed: [] };
+    next = defenders(next, window).length > 0 ? { ...next, response: window } : applyOrFizzle(next, effect);
+  }
+  return next;
+}
+
+/** إذا ما بقى أحد يدافع، التأثير الأصلي يتنفذ. */
+function settleDefense(state: GameState): GameState {
+  const window = state.response;
+  if (!window || defenders(state, window).length > 0) return state;
+  return advance(applyOrFizzle({ ...state, response: null }, window.effect));
+}
+
+/** كرت الرد ثبت (صاحب الأكشن ما رد عليه): ننفذ أثره. */
+function resolveStanding(state: GameState, effect: Effect, standing: StandingResponse): GameState {
+  switch (standing.kind) {
+    case 'hayyour':
+      return standing.bounce ? applyOrFizzle(state, standing.bounce) : state;
+    case 'edfaaliEjari':
+      // الإيجار يصير على اللاعب المختار، ويقدر يرد بكروته.
+      return standing.payer === null ? state : { ...state, queue: [{ ...effect, target: standing.payer }, ...state.queue] };
+    default:
+      // مالك امل، فزعه، ماتشوف شر: التأثير ينلغي عن المستهدف.
+      return state;
+  }
+}
+
+type BounceResult = { readonly ok: true; readonly bounce: Effect | null } | { readonly ok: false; readonly error: MoveError };
+
+/** يبني التأثير المعكوس لـ"حيور": يرجع على صاحب الأكشن وصاحب حيور هو المستفيد. */
+function buildBounce(state: GameState, effect: Effect, choice: BounceChoice | undefined): BounceResult {
+  // "حصانه" تحمي صاحب الأكشن من الارتداد، وكروت التبديل تنلغي فقط.
+  if (state.immune.includes(effect.actor) || SWAP_ACTIONS.includes(effect.action)) return { ok: true, bounce: null };
+
+  const reversed: Effect = { ...effect, actor: effect.target, target: effect.actor, params: {} };
+  if (!CHOICE_ACTIONS.includes(effect.action)) return { ok: true, bounce: reversed };
+
+  // السرقة: صاحب حيور يختار وش ياخذ. بدون اختيار = يلغي فقط.
+  if (!choice) return { ok: true, bounce: null };
+  const picked =
+    choice.handIndex === undefined ? undefined : getPlayer(state, effect.actor).hand[choice.handIndex]?.id;
+  const params: EffectParams = {
+    ...(choice.targetCardIds ? { targetCardIds: choice.targetCardIds } : {}),
+    ...(choice.color ? { color: choice.color } : {}),
+    ...(picked ? { pickedCardId: picked } : {}),
+  };
+  const bounce: Effect = { ...reversed, params };
+  return applyEffect(state, bounce).ok ? { ok: true, bounce } : { ok: false, error: 'invalidCard' };
+}
+
+function respond(state: GameState, move: RespondMove): MoveResult {
+  const window = state.response;
+  if (!window) return fail('noResponsePending');
+  const { effect } = window;
+  const seat = move.seat;
+
+  const allowed: ResponseKind[] =
+    window.awaiting === 'actor' ? (seat === effect.actor ? ['malekAmal'] : []) : allowedResponses(window, seat);
+  const isMyTurnToRespond =
+    window.awaiting === 'actor' ? seat === effect.actor : defenders(state, window).includes(seat);
+  if (!isMyTurnToRespond) return fail('notYourResponse');
+
+  // ---- "ما أرد" ----
+  if (move.cardId === undefined) {
+    if (window.awaiting === 'actor') {
+      if (!window.standing) return fail('invalidResponse');
+      return done(advance(resolveStanding({ ...state, response: null }, effect, window.standing)));
     }
-    const card = drawPile.pop();
-    if (!card) break;
-    drawn.push(card);
+    return done(settleDefense({ ...state, response: { ...window, passed: [...window.passed, seat] } }));
   }
 
+  // ---- لعب كرت رد ----
   const player = getPlayer(state, seat);
-  return withPlayer({ ...state, drawPile, firePile, seed }, { ...player, hand: [...player.hand, ...drawn] });
+  const card = player.hand.find((c) => c.id === move.cardId);
+  if (!card) return fail('cardNotInHand');
+  if (card.kind !== 'action') return fail('wrongCardKind');
+  const kind = card.action === 'tebWetkhayyar' ? move.as : card.action;
+  if (!isResponseKind(kind) || !allowed.includes(kind)) return fail('invalidResponse');
+
+  // كرت الرد يروح للنار، وما ينحسب من كروت الدور.
+  const used = withPlayer(
+    { ...state, firePile: [...state.firePile, card] },
+    { ...player, hand: player.hand.filter((c) => c.id !== card.id) },
+  );
+
+  if (window.awaiting === 'actor') {
+    // صاحب الأكشن لغى كرت الرد: يرجع الدور للمدافعين من جديد.
+    return done(settleDefense({ ...used, response: { ...window, standing: null, awaiting: 'defense', passed: [] } }));
+  }
+
+  let bounce: Effect | null = null;
+  let payer: number | null = null;
+  if (kind === 'hayyour') {
+    const built = buildBounce(used, effect, move.bounce);
+    if (!built.ok) return fail(built.error);
+    bounce = built.bounce;
+  }
+  if (kind === 'edfaaliEjari') {
+    const chosen = move.payerSeat;
+    if (!isOtherSeat(seat, chosen) || chosen === effect.actor || state.immune.includes(chosen)) {
+      return fail('invalidTarget');
+    }
+    payer = chosen;
+  }
+
+  const standing: StandingResponse = { kind, by: seat, bounce, payer };
+  if (!actorCanCounter(used, effect.actor)) {
+    return done(advance(resolveStanding({ ...used, response: null }, effect, standing)));
+  }
+  return done({ ...used, response: { ...window, standing, awaiting: 'actor' } });
 }
 
-/** ينقل عقارات من لاعب للاعب. اللون يبقى مثل ما هو إلا إذا انحدد لون جديد (للجيكر). */
-function transferProperties(
-  state: GameState,
-  fromSeat: number,
-  toSeat: number,
-  cardIds: readonly string[],
-  newColor?: ColorId,
-): GameState {
-  const ids = new Set(cardIds);
-  const from = getPlayer(state, fromSeat);
-  const moving = from.properties.filter((p) => ids.has(p.card.id));
-  const to = getPlayer(state, toSeat);
-
-  const nextFrom = detachBrokenBuildings({ ...from, properties: from.properties.filter((p) => !ids.has(p.card.id)) });
-  const nextTo: PlayerState = {
-    ...to,
-    properties: [...to.properties, ...moving.map((p) => ({ card: p.card, color: newColor ?? p.color }))],
-  };
-  return withPlayer(withPlayer(state, nextFrom), nextTo);
-}
+// ===================== حركات الدور =====================
 
 function draw(state: GameState, seat: number): MoveResult {
   if (state.turn.hasDrawn) return fail('alreadyDrew');
@@ -333,17 +393,21 @@ function playRent(
   if (doubleCardId !== undefined) {
     const double = player.hand.find((c) => c.id === doubleCardId);
     if (!double) return fail('cardNotInHand');
-    if (double.kind !== 'action' || double.action !== 'doubleRent') return fail('wrongCardKind');
+    // "طب وتخير" يصير أي أكشن، فينلعب كدوبل ايجار بعد.
+    if (double.kind !== 'action' || (double.action !== 'doubleRent' && double.action !== 'tebWetkhayyar')) {
+      return fail('wrongCardKind');
+    }
     played.push(double);
     amount = rent * 2;
   }
 
   let payers: number[];
   if (def.payer === 'one') {
-    if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
+    if (!isOtherSeat(seat, targetSeat) || state.immune.includes(targetSeat)) return fail('invalidTarget');
     payers = [targetSeat];
   } else {
-    payers = otherSeats(seat);
+    // "حصانه": الكرت يتعدى اللاعب المحمي.
+    payers = otherSeats(seat).filter((s) => !state.immune.includes(s));
   }
 
   const playedIds = new Set(played.map((c) => c.id));
@@ -352,17 +416,96 @@ function playRent(
     { ...countPlay(state), firePile: [...state.firePile, ...played] },
     { ...player, hand: player.hand.filter((c) => !playedIds.has(c.id)) },
   );
-  return done(
-    startPayment(
-      next,
-      seat,
-      payers.map((from) => ({ from, amount })),
-    ),
-  );
+  const effects: Effect[] = payers.map((target) => ({
+    action: 'rent',
+    isRent: true,
+    actor: seat,
+    target,
+    amount,
+    params: {},
+  }));
+  return done(advance({ ...next, queue: effects }));
+}
+
+/** يبني تأثيرات كرت الأكشن على كل مستهدف، أو يرجّع سبب الرفض. */
+function buildEffects(base: GameState, action: ActionId, move: PlayActionMove): Effect[] | MoveError {
+  const { seat, targetSeat } = move;
+  const def: ActionDef | undefined = ACTIONS.find((d) => d.id === action);
+  const make = (target: number, amount: number, params: EffectParams, isRent = false): Effect => ({
+    action,
+    isRent,
+    actor: seat,
+    target,
+    amount,
+    params,
+  });
+
+  switch (action) {
+    case 'eyadi':
+      // "حصانه": الكرت يتعدى اللاعب المحمي.
+      return otherSeats(seat)
+        .filter((s) => !base.immune.includes(s))
+        .map((target) => make(target, def?.amount ?? 0, {}));
+    case 'qarqash':
+    case 'qardIskan':
+      if (!isOtherSeat(seat, targetSeat)) return 'invalidTarget';
+      return [make(targetSeat, def?.amount ?? 0, {})];
+    case 'tathmeen': {
+      if (!isOtherSeat(seat, targetSeat)) return 'invalidTarget';
+      const amount = rentForAllCompleteSets(getPlayer(base, seat));
+      if (amount <= 0) return 'noCompleteSet';
+      return [make(targetSeat, amount, {}, true)];
+    }
+    case 'boog':
+    case 'boogDouble':
+    case 'boogJoker':
+    case 'baddel':
+    case 'rahatAlek':
+    case 'endebes':
+    case 'ezalah':
+    case 'etHas':
+    case 'estareeh':
+    case 'ekshef': {
+      if (!isOtherSeat(seat, targetSeat)) return 'invalidTarget';
+      const params: EffectParams = {
+        ...(move.targetCardIds ? { targetCardIds: move.targetCardIds } : {}),
+        ...(move.ownCardId ? { ownCardId: move.ownCardId } : {}),
+        ...(move.color ? { color: move.color } : {}),
+        ...(move.ownColor ? { ownColor: move.ownColor } : {}),
+      };
+      return [make(targetSeat, 0, params)];
+    }
+    case 'werathtek': {
+      if (!isOtherSeat(seat, targetSeat)) return 'invalidTarget';
+      const picked = move.handIndex === undefined ? undefined : getPlayer(base, targetSeat).hand[move.handIndex];
+      if (!picked) return 'invalidCard';
+      return [make(targetSeat, 0, { pickedCardId: picked.id })];
+    }
+    case 'mukhalafah': {
+      const burns = move.burns ?? [];
+      const available = otherSeats(seat).filter((s) => !base.immune.includes(s) && getPlayer(base, s).hand.length > 0);
+      // تنلعب على المتوفر: لاعبين إذا موجودين، أو واحد إذا ما فيه غيره بيده كروت.
+      const needed = Math.min(2, available.length);
+      if (needed === 0) return 'invalidTarget';
+      if (burns.length !== needed || new Set(burns.map((b) => b.seat)).size !== needed) return 'invalidTarget';
+
+      const effects: Effect[] = [];
+      for (const burn of burns) {
+        if (!available.includes(burn.seat)) return 'invalidTarget';
+        const picked = getPlayer(base, burn.seat).hand[burn.handIndex];
+        if (!picked) return 'invalidCard';
+        effects.push(make(burn.seat, 0, { pickedCardId: picked.id }));
+      }
+      return effects;
+    }
+    default:
+      // "دوبل ايجار" ينلعب مع كرت إيجار فقط، وكروت الرد تنلعب خارج الدور.
+      return 'unsupportedAction';
+  }
 }
 
 function playAction(state: GameState, move: PlayActionMove): MoveResult {
-  const { seat, cardId, targetSeat } = move;
+  const { seat, cardId } = move;
   const blocked = checkCanPlay(state);
   if (blocked) return fail(blocked);
 
@@ -371,170 +514,37 @@ function playAction(state: GameState, move: PlayActionMove): MoveResult {
   if (!card) return fail('cardNotInHand');
   if (card.kind !== 'action') return fail('wrongCardKind');
 
-  const def: ActionDef | undefined = ACTIONS.find((d) => d.id === card.action);
+  // "طب وتخير" يصير أي أكشن تختاره.
+  const action = card.action === 'tebWetkhayyar' ? move.asAction : card.action;
+  if (action === undefined || action === 'tebWetkhayyar') return fail('unsupportedAction');
 
   // الحالة بعد لعب الكرت: يطلع من اليد للنار. "زايد لعبه" ما ينحسب من كروت الدور.
-  const counted = card.action === 'extraPlay' ? state : countPlay(state);
+  const counted = action === 'extraPlay' ? state : countPlay(state);
   const base = withPlayer(
     { ...counted, firePile: [...state.firePile, card] },
     { ...owner, hand: owner.hand.filter((c) => c.id !== cardId) },
   );
-  const me = getPlayer(base, seat);
-  const targetIds = move.targetCardIds ?? [];
 
-  switch (card.action) {
-    // ---------- كروت الدفع ----------
-    case 'qarqash':
-    case 'qardIskan': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      return done(startPayment(base, seat, [{ from: targetSeat, amount: def?.amount ?? 0 }]));
-    }
-    case 'eyadi': {
-      const debts = otherSeats(seat).map((from) => ({ from, amount: def?.amount ?? 0 }));
-      return done(startPayment(base, seat, debts));
-    }
-    case 'tathmeen': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      const amount = rentForAllCompleteSets(me);
-      if (amount <= 0) return fail('noCompleteSet');
-      return done(startPayment(base, seat, [{ from: targetSeat, amount }]));
-    }
-
-    // ---------- كروت السرقة والتبديل ----------
-    case 'boog':
-    case 'boogDouble': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      const stealable = stealableProperties(getPlayer(base, targetSeat));
-      // "دبل" يسرق عقارين، وإذا ما فيه إلا واحد ينسرق يسرق الواحد.
-      const needed = card.action === 'boog' ? 1 : Math.min(2, stealable.length);
-      if (needed === 0 || targetIds.length !== needed || new Set(targetIds).size !== needed) return fail('invalidCard');
-      if (!targetIds.every((id) => stealable.some((p) => p.card.id === id))) return fail('invalidCard');
-      return done(checkWin(transferProperties(base, targetSeat, seat, targetIds), seat));
-    }
-    case 'boogJoker': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      const jokers = stealableJokers(getPlayer(base, targetSeat));
-      const jokerId = targetIds[0];
-      if (targetIds.length !== 1 || !jokers.some((p) => p.card.id === jokerId)) return fail('invalidCard');
-      if (move.color === undefined) return fail('colorRequired');
-      return done(checkWin(transferProperties(base, targetSeat, seat, targetIds, move.color), seat));
-    }
-    case 'baddel': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      const theirId = targetIds[0];
-      const ownId = move.ownCardId;
-      if (targetIds.length !== 1 || ownId === undefined) return fail('invalidCard');
-      if (!stealableProperties(getPlayer(base, targetSeat)).some((p) => p.card.id === theirId)) return fail('invalidCard');
-      if (!stealableProperties(me).some((p) => p.card.id === ownId)) return fail('invalidCard');
-      const swapped = transferProperties(transferProperties(base, targetSeat, seat, targetIds), seat, targetSeat, [ownId]);
-      return done(checkWin(swapped, seat, targetSeat));
-    }
-    case 'rahatAlek': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      const color = move.color;
-      if (color === undefined) return fail('colorRequired');
-      const target = getPlayer(base, targetSeat);
-      if (!isSetComplete(target.properties, color)) return fail('setNotComplete');
-      // الطقم ينتقل كامل: عقاراته والجيكر اللي فيه ومبانيه.
-      const next = withPlayer(
-        withPlayer(base, {
-          ...target,
-          properties: target.properties.filter((p) => p.color !== color),
-          buildings: target.buildings.filter((b) => b.color !== color),
-        }),
-        {
-          ...me,
-          properties: [...me.properties, ...target.properties.filter((p) => p.color === color)],
-          buildings: [...me.buildings, ...target.buildings.filter((b) => b.color === color)],
-        },
-      );
-      return done(checkWin(next, seat));
-    }
-    case 'endebes': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      const mine = move.ownColor;
-      const theirs = move.color;
-      if (mine === undefined || theirs === undefined) return fail('colorRequired');
-      if (!isSetComplete(me.properties, mine)) return fail('noCompleteSet');
-      const target = getPlayer(base, targetSeat);
-      if (!isSetComplete(target.properties, theirs)) return fail('setNotComplete');
-      const nextMe = detachBrokenBuildings({
-        ...me,
-        properties: [...me.properties.filter((p) => p.color !== mine), ...target.properties.filter((p) => p.color === theirs)],
-        buildings: [...me.buildings.filter((b) => b.color !== mine), ...target.buildings.filter((b) => b.color === theirs)],
-      });
-      const nextTarget = detachBrokenBuildings({
-        ...target,
-        properties: [...target.properties.filter((p) => p.color !== theirs), ...me.properties.filter((p) => p.color === mine)],
-        buildings: [...target.buildings.filter((b) => b.color !== theirs), ...me.buildings.filter((b) => b.color === mine)],
-      });
-      return done(checkWin(withPlayer(withPlayer(base, nextMe), nextTarget), seat, targetSeat));
-    }
-    case 'ezalah': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      const removable = removableFromCompleteSets(getPlayer(base, targetSeat));
-      const removeId = targetIds[0];
-      if (targetIds.length !== 1 || !removable.some((p) => p.card.id === removeId)) return fail('invalidCard');
-      return done(checkWin(transferProperties(base, targetSeat, seat, targetIds), seat));
-    }
-    case 'etHas': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      const target = getPlayer(base, targetSeat);
-      return done(withPlayer(withPlayer(base, { ...me, hand: target.hand }), { ...target, hand: me.hand }));
-    }
-    case 'werathtek': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      const target = getPlayer(base, targetSeat);
-      const taken = move.handIndex === undefined ? undefined : target.hand[move.handIndex];
-      if (!taken) return fail('invalidCard');
-      return done(
-        withPlayer(
-          withPlayer(base, { ...target, hand: target.hand.filter((c) => c.id !== taken.id) }),
-          { ...me, hand: [...me.hand, taken] },
-        ),
-      );
-    }
-    case 'mukhalafah': {
-      const burns = move.burns ?? [];
-      const available = otherSeats(seat).filter((s) => getPlayer(base, s).hand.length > 0);
-      // تنلعب على المتوفر: لاعبين إذا موجودين، أو واحد إذا ما فيه غيره بيده كروت.
-      const needed = Math.min(2, available.length);
-      if (needed === 0) return fail('invalidTarget');
-      if (burns.length !== needed || new Set(burns.map((b) => b.seat)).size !== needed) return fail('invalidTarget');
-
-      let next = base;
-      for (const burn of burns) {
-        if (!available.includes(burn.seat)) return fail('invalidTarget');
-        const target = getPlayer(next, burn.seat);
-        const burned = target.hand[burn.handIndex];
-        if (!burned) return fail('invalidCard');
-        next = withPlayer(
-          { ...next, firePile: [...next.firePile, burned] },
-          { ...target, hand: target.hand.filter((c) => c.id !== burned.id) },
-        );
-      }
-      return done(next);
-    }
-
-    // ---------- كروت الدور واليد ----------
+  switch (action) {
     case 'draw2':
       return done(drawCards(base, seat, DRAW_PER_TURN));
     case 'extraPlay':
       return done({ ...base, extraPlays: base.extraPlays + 1 });
-    case 'estareeh': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      // التفويت يتراكم: إذا انلعب مرتين على نفس اللاعب يفوّت دورين.
-      return done({ ...base, skips: [...base.skips, targetSeat] });
-    }
-    case 'ekshef': {
-      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
-      return done({ ...base, revealed: { viewer: seat, target: targetSeat } });
-    }
-
+    case 'hasanah':
+      // تحميك من كل شي لين يرجع دورك.
+      return done({ ...base, immune: base.immune.includes(seat) ? base.immune : [...base.immune, seat] });
     default:
-      // "دوبل ايجار" ينلعب مع كرت إيجار فقط، وكروت الرد و"طب وتخير" تنضاف في المرحلة 5.
-      return fail('unsupportedAction');
+      break;
   }
+
+  const effects = buildEffects(base, action, move);
+  if (typeof effects === 'string') return fail(effects);
+  // لازم كل تأثير يكون قانوني وقت اللعب.
+  for (const effect of effects) {
+    const trial = applyEffect(base, effect);
+    if (!trial.ok) return trial;
+  }
+  return done(advance({ ...base, queue: effects }));
 }
 
 /** حرق كرت أكشن: ينرمي بالنار بدون تنفيذ، وينحسب من كروت الدور. */
@@ -593,7 +603,8 @@ function placeBuilding(state: GameState, seat: number, cardId: string, color: Co
 
 function pay(state: GameState, seat: number, cardIds: readonly string[]): MoveResult {
   const pending = state.pending;
-  const debt = pending?.debts.find((d) => d.from === seat);
+  const debtIndex = pending ? pending.debts.findIndex((d) => d.from === seat) : -1;
+  const debt = pending?.debts[debtIndex];
   if (!pending || !debt) return fail('noPaymentDue');
 
   const payer = getPlayer(state, seat);
@@ -620,11 +631,15 @@ function pay(state: GameState, seat: number, cardIds: readonly string[]): MoveRe
     properties: [...receiver.properties, ...properties],
   };
 
-  const debts = pending.debts.filter((d) => d.from !== seat);
-  const next = withPlayer(
-    withPlayer({ ...state, pending: debts.length > 0 ? { to: pending.to, debts } : null }, paid),
-    received,
-  );
+  const debts = pending.debts.filter((_, i) => i !== debtIndex);
+  let nextPending: PendingPayment | null = debts.length > 0 ? { to: pending.to, debts } : null;
+  let pendingQueue = state.pendingQueue;
+  if (nextPending === null && pendingQueue.length > 0) {
+    nextPending = pendingQueue[0] ?? null;
+    pendingQueue = pendingQueue.slice(1);
+  }
+
+  const next = withPlayer(withPlayer({ ...state, pending: nextPending, pendingQueue }, paid), received);
   return done(checkWin(next, pending.to));
 }
 
@@ -651,16 +666,23 @@ function endTurn(state: GameState, seat: number): MoveResult {
   // اللاعب اللي عليه "استريح" دوره يتفوّت: ما يسحب ولا يلعب.
   let nextSeat = (seat + 1) % PLAYER_COUNT;
   let skips = state.skips;
+  let immune = state.immune;
   for (let i = 0; i < PLAYER_COUNT && skips.includes(nextSeat); i++) {
     // ينشال تفويت واحد فقط: إذا عليه أكثر من واحد يبقى الباقي لدوره اللي بعده.
     const index = skips.indexOf(nextSeat);
-    skips = skips.filter((_, i) => i !== index);
+    const skipped = nextSeat;
+    skips = skips.filter((_, j) => j !== index);
+    immune = immune.filter((s) => s !== skipped);
     nextSeat = (nextSeat + 1) % PLAYER_COUNT;
   }
+  // "حصانه" تنتهي أول ما يرجع دور صاحبها.
+  const turnSeat = nextSeat;
+  immune = immune.filter((s) => s !== turnSeat);
 
   return done({
     ...state,
     skips,
+    immune,
     extraPlays: 0,
     revealed: null,
     turn: { seat: nextSeat, hasDrawn: false, playsUsed: 0, discarding: false },
@@ -671,7 +693,9 @@ function endTurn(state: GameState, seat: number): MoveResult {
 export function applyMove(state: GameState, move: Move): MoveResult {
   if (state.winner !== null) return fail('gameOver');
 
-  // الدفع ينلعب خارج الدور، واللعب يوقف لين يخلص كل الدفع المعلّق.
+  // الرد والدفع ينلعبون خارج الدور، واللعب يوقف لين يخلصون.
+  if (move.type === 'respond') return respond(state, move);
+  if (state.response !== null) return fail('responsePending');
   if (move.type === 'pay') return pay(state, move.seat, move.cardIds);
   if (state.pending !== null) return fail('paymentPending');
   if (move.seat !== state.turn.seat) return fail('notYourTurn');
@@ -704,6 +728,8 @@ export function applyMove(state: GameState, move: Move): MoveResult {
   }
 }
 
+// ===================== الحركات القانونية =====================
+
 /** كل الأزواج من قائمة. */
 function pairs<T>(items: readonly T[]): [T, T][] {
   const result: [T, T][] = [];
@@ -715,101 +741,36 @@ function pairs<T>(items: readonly T[]): [T, T][] {
   return result;
 }
 
-/** الحركات القانونية لكرت أكشن واحد باليد. */
-function actionMoves(state: GameState, player: PlayerState, card: Card & { kind: 'action' }): Move[] {
+/** الحركات القانونية لكرت أكشن باليد، ينلعب كأكشن معيّن. */
+function actionMoves(state: GameState, player: PlayerState, cardId: string, action: ActionId, viaTeb: boolean): Move[] {
   const seat = player.seat;
-  const base = { type: 'playAction' as const, seat, cardId: card.id };
-  const others = otherSeats(seat);
+  const base: PlayActionMove = viaTeb
+    ? { type: 'playAction', seat, cardId, asAction: action }
+    : { type: 'playAction', seat, cardId };
+  const targets = otherSeats(seat).filter((s) => !state.immune.includes(s));
   const moves: Move[] = [];
 
-  switch (card.action) {
+  switch (action) {
     case 'eyadi':
     case 'draw2':
     case 'extraPlay':
+    case 'hasanah':
       moves.push(base);
-      break;
-    case 'qarqash':
-    case 'qardIskan':
-    case 'etHas':
-    case 'ekshef':
-      for (const targetSeat of others) moves.push({ ...base, targetSeat });
-      break;
-    case 'estareeh':
-      for (const targetSeat of others) moves.push({ ...base, targetSeat });
       break;
     case 'tathmeen':
       if (completeColors(player.properties).length > 0) {
-        for (const targetSeat of others) moves.push({ ...base, targetSeat });
-      }
-      break;
-    case 'boog':
-      for (const targetSeat of others) {
-        for (const p of stealableProperties(getPlayer(state, targetSeat))) {
-          moves.push({ ...base, targetSeat, targetCardIds: [p.card.id] });
-        }
-      }
-      break;
-    case 'boogDouble':
-      for (const targetSeat of others) {
-        const stealable = stealableProperties(getPlayer(state, targetSeat));
-        if (stealable.length === 1) {
-          moves.push({ ...base, targetSeat, targetCardIds: stealable.map((p) => p.card.id) });
-        }
-        for (const [a, b] of pairs(stealable)) {
-          moves.push({ ...base, targetSeat, targetCardIds: [a.card.id, b.card.id] });
-        }
-      }
-      break;
-    case 'boogJoker':
-      for (const targetSeat of others) {
-        for (const p of stealableJokers(getPlayer(state, targetSeat))) {
-          for (const color of COLORS) {
-            moves.push({ ...base, targetSeat, targetCardIds: [p.card.id], color: color.id });
-          }
-        }
-      }
-      break;
-    case 'baddel':
-      for (const targetSeat of others) {
-        for (const theirs of stealableProperties(getPlayer(state, targetSeat))) {
-          for (const mine of stealableProperties(player)) {
-            moves.push({ ...base, targetSeat, targetCardIds: [theirs.card.id], ownCardId: mine.card.id });
-          }
-        }
-      }
-      break;
-    case 'rahatAlek':
-      for (const targetSeat of others) {
-        for (const color of completeColors(getPlayer(state, targetSeat).properties)) {
-          moves.push({ ...base, targetSeat, color });
-        }
-      }
-      break;
-    case 'endebes':
-      for (const ownColor of completeColors(player.properties)) {
-        for (const targetSeat of others) {
-          for (const color of completeColors(getPlayer(state, targetSeat).properties)) {
-            moves.push({ ...base, targetSeat, color, ownColor });
-          }
-        }
-      }
-      break;
-    case 'ezalah':
-      for (const targetSeat of others) {
-        for (const p of removableFromCompleteSets(getPlayer(state, targetSeat))) {
-          moves.push({ ...base, targetSeat, targetCardIds: [p.card.id] });
-        }
+        for (const targetSeat of targets) moves.push({ ...base, targetSeat });
       }
       break;
     case 'werathtek':
-      for (const targetSeat of others) {
+      for (const targetSeat of targets) {
         getPlayer(state, targetSeat).hand.forEach((_, handIndex) => {
           moves.push({ ...base, targetSeat, handIndex });
         });
       }
       break;
     case 'mukhalafah': {
-      const available = others.filter((s) => getPlayer(state, s).hand.length > 0);
+      const available = targets.filter((s) => getPlayer(state, s).hand.length > 0);
       const picks = (s: number): BlindPick[] => getPlayer(state, s).hand.map((_, handIndex) => ({ seat: s, handIndex }));
       if (available.length === 1) {
         for (const pick of picks(available[0] as number)) moves.push({ ...base, burns: [pick] });
@@ -822,24 +783,78 @@ function actionMoves(state: GameState, player: PlayerState, card: Card & { kind:
       break;
     }
     default:
+      // بقية الكروت: كل مستهدف وكل اختيار قانوني عليه.
+      for (const targetSeat of targets) {
+        for (const option of effectOptions(state, action, seat, targetSeat)) {
+          moves.push({ ...base, targetSeat, ...option });
+        }
+      }
       break;
+  }
+  return moves;
+}
+
+/** حركات الرد القانونية بنافذة الرد المفتوحة. */
+function responseMoves(state: GameState, window: ResponseWindow): Move[] {
+  const { effect } = window;
+  const moves: Move[] = [];
+
+  const seats = window.awaiting === 'actor' ? [effect.actor] : defenders(state, window);
+  for (const seat of seats) {
+    moves.push({ type: 'respond', seat });
+    const allowed: ResponseKind[] = window.awaiting === 'actor' ? ['malekAmal'] : allowedResponses(window, seat);
+
+    for (const card of getPlayer(state, seat).hand) {
+      if (card.kind !== 'action') continue;
+      const viaTeb = card.action === 'tebWetkhayyar';
+      const kinds = viaTeb ? allowed : allowed.filter((k) => k === card.action);
+
+      for (const kind of kinds) {
+        const base: RespondMove = viaTeb
+          ? { type: 'respond', seat, cardId: card.id, as: kind }
+          : { type: 'respond', seat, cardId: card.id };
+
+        if (kind === 'edfaaliEjari') {
+          for (const payerSeat of otherSeats(seat)) {
+            if (payerSeat !== effect.actor && !state.immune.includes(payerSeat)) moves.push({ ...base, payerSeat });
+          }
+        } else if (kind === 'hayyour' && CHOICE_ACTIONS.includes(effect.action) && !state.immune.includes(effect.actor)) {
+          // صاحب حيور يختار وش ياخذ من صاحب الأكشن.
+          const actorHand = getPlayer(state, effect.actor).hand;
+          const choices: BounceChoice[] = effectOptions(state, effect.action, seat, effect.actor).map((option) => ({
+            ...(option.targetCardIds ? { targetCardIds: option.targetCardIds } : {}),
+            ...(option.color ? { color: option.color } : {}),
+            ...(option.pickedCardId ? { handIndex: actorHand.findIndex((c) => c.id === option.pickedCardId) } : {}),
+          }));
+          if (choices.length === 0) moves.push(base);
+          for (const bounce of choices) moves.push({ ...base, bounce });
+        } else {
+          moves.push(base);
+        }
+      }
+    }
   }
   return moves;
 }
 
 /**
  * الحركات القانونية بالحالة الحالية.
- * إذا فيه دفع معلّق: حركة دفع جاهزة لكل مديون. غير كذا: حركات صاحب الدور.
+ * نافذة رد مفتوحة: حركات الرد. دفع معلّق: حركة دفع جاهزة لكل مديون. غير كذا: حركات صاحب الدور.
  */
 export function legalMoves(state: GameState): Move[] {
   if (state.winner !== null) return [];
 
+  if (state.response !== null) return responseMoves(state, state.response);
+
   if (state.pending !== null) {
-    return state.pending.debts.map((debt) => ({
-      type: 'pay',
-      seat: debt.from,
-      cardIds: suggestPayment(getPlayer(state, debt.from), debt.amount),
-    }));
+    const seen = new Set<number>();
+    const moves: Move[] = [];
+    for (const debt of state.pending.debts) {
+      if (seen.has(debt.from)) continue;
+      seen.add(debt.from);
+      moves.push({ type: 'pay', seat: debt.from, cardIds: suggestPayment(getPlayer(state, debt.from), debt.amount) });
+    }
+    return moves;
   }
 
   const seat = state.turn.seat;
@@ -869,7 +884,8 @@ export function legalMoves(state: GameState): Move[] {
         const def: RentDef | undefined = RENTS.find((d) => d.id === card.rent);
         if (!def) continue;
         const colors = def.colors === 'any' ? COLORS.map((c) => c.id) : def.colors;
-        const targets: (number | undefined)[] = def.payer === 'one' ? otherSeats(seat) : [undefined];
+        const targets: (number | undefined)[] =
+          def.payer === 'one' ? otherSeats(seat).filter((s) => !state.immune.includes(s)) : [undefined];
         for (const color of colors) {
           if (rentFor(player, color) <= 0) continue;
           for (const targetSeat of targets) {
@@ -880,7 +896,14 @@ export function legalMoves(state: GameState): Move[] {
           }
         }
       } else if (card.kind === 'action') {
-        moves.push(...actionMoves(state, player, card));
+        if (card.action === 'tebWetkhayyar') {
+          // "طب وتخير" يصير أي أكشن ينلعب بالدور.
+          for (const def of ACTIONS) {
+            if (def.id !== 'tebWetkhayyar') moves.push(...actionMoves(state, player, card.id, def.id, true));
+          }
+        } else {
+          moves.push(...actionMoves(state, player, card.id, card.action, false));
+        }
         moves.push({ type: 'burnAction', seat, cardId: card.id });
       }
     }
