@@ -1,0 +1,2 @@
+# الحزمة المولّدة تبقى بنهايات أسطر LF عشان تطابق ناتج البناء
+supabase/functions/_shared/game.js text eol=lf

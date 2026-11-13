@@ -10,5 +10,6 @@ await build({
   platform: 'neutral',
   target: 'es2022',
   legalComments: 'none',
+  charset: 'utf8',
 });
 console.log('built supabase/functions/_shared/game.js');
