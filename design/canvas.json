@@ -1,0 +1,37 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-11-13T12:00:00Z"},
+  "title": "DEAL Q8 — تصميم اللعبة",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 510, "w": 844, "h": 390, "title": "4 · طاولة اللعب"},
+    "Start.dc.html": {"x": 0, "y": 0, "w": 844, "h": 390, "title": "1 · البداية", "is_interactive": true},
+    "Home.dc.html": {"x": 924, "y": 0, "w": 844, "h": 390, "title": "2 · الرئيسية", "is_interactive": true},
+    "Lobby.dc.html": {"x": 1848, "y": 0, "w": 844, "h": 390, "title": "3 · غرفة الانتظار", "is_interactive": true},
+    "Target.dc.html": {"x": 924, "y": 510, "w": 844, "h": 390, "title": "5 · نافذة اختيار الهدف"},
+    "Pay.dc.html": {"x": 1848, "y": 510, "w": 844, "h": 390, "title": "5 · نافذة اختيار الدفع"},
+    "Respond.dc.html": {"x": 2772, "y": 510, "w": 844, "h": 390, "title": "5 · نافذة الرد"},
+    "GameOver.dc.html": {"x": 0, "y": 1020, "w": 844, "h": 390, "title": "6 · نهاية اللعبة"},
+    "Settings.dc.html": {"x": 924, "y": 1020, "w": 844, "h": 390, "title": "7 · الإعدادات"},
+    "CardsAction.dc.html": {"x": 0, "y": 1530, "w": 1640, "h": 1400, "title": "الكروت · الأكشن والإيجار"},
+    "CardsProperty.dc.html": {"x": 1720, "y": 1530, "w": 1640, "h": 1400, "title": "الكروت · العقارات والفلوس والمباني"}
+  },
+  "order": [
+    "Main.dc.html",
+    "Start.dc.html",
+    "Home.dc.html",
+    "Lobby.dc.html",
+    "Target.dc.html",
+    "Pay.dc.html",
+    "Respond.dc.html",
+    "GameOver.dc.html",
+    "Settings.dc.html",
+    "CardsAction.dc.html",
+    "CardsProperty.dc.html"
+  ],
+  "notes": {
+    "head": {"x": 0, "y": -300, "text": "DEAL Q8 — الشاشات والكروت", "kind": "title1", "maxW": 3616}
+  },
+  "designSystems": []
+}

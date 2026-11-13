@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>نهاية اللعبة</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#F3EFE4}a:hover{color:#F3EFE4}
+</style>
+</helmet>
+<div dir="rtl" style="width: 844px; height: 390px; box-sizing: border-box; background: #0F2E33; color: #F3EFE4; font-family: Tajawal, sans-serif; display: flex">
+
+<div style="width: 360px; box-sizing: border-box; background: #14464A; padding: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center">
+<span style="font-size: 15px; color: #F3EFE4">الفائز</span>
+<span style="font-family: Lalezar, sans-serif; font-size: 64px; line-height: 1; color: #F2C14E">بوفهد</span>
+<svg aria-hidden="true" width="208" height="14"><defs><pattern id="zg" width="26" height="14" patternUnits="userSpaceOnUse"><path d="M0 14 L13 0 L26 14 Z" fill="#E4572E"></path></pattern></defs><rect width="208" height="14" fill="url(#zg)"></rect></svg>
+<span style="font-size: 16px; font-weight: 700">كمّل 6 أطقم مختلفة</span>
+<div style="display: flex; gap: 6px">
+<sc-for list="{{winSets}}" as="c" hint-placeholder-count="6">
+<span style="width: 26px; height: 36px; border-radius: 4px; box-shadow: 0 0 0 1px #F3EFE4; background: {{c}}"></span>
+</sc-for>
+</div>
+</div>
+
+<div style="flex: 1; box-sizing: border-box; padding: 24px 28px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-family: Lalezar, sans-serif; font-size: 24px; line-height: 1">ملخص اللعبة</span>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; font-size: 13px; color: #C9DAD8; padding: 0 12px">
+<span style="flex: 1">اللاعب</span>
+<span style="width: 110px; text-align: center">الأطقم الكاملة</span>
+<span style="width: 80px; text-align: center">البنك</span>
+</div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="4">
+<div style="display: flex; align-items: center; height: 40px; border-radius: 8px; padding: 0 12px; font-size: 15px; font-weight: 700; {{r.box}}">
+<span style="flex: 1">{{r.name}}</span>
+<span style="width: 110px; text-align: center">{{r.sets}}</span>
+<span style="width: 80px; text-align: center">{{r.bank}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 10px; margin-top: auto">
+<a href="Main.dc.html" style="flex: 2; height: 50px; border-radius: 10px; background: #F2C14E; color: #1B1B1B; font-family: Lalezar, sans-serif; font-size: 22px; display: flex; align-items: center; justify-content: center; text-decoration: none">إعادة اللعب</a>
+<a href="Home.dc.html" style="flex: 1; height: 50px; box-sizing: border-box; border: 2px solid #F3EFE4; border-radius: 10px; font-family: Lalezar, sans-serif; font-size: 20px; display: flex; align-items: center; justify-content: center; text-decoration: none">الرئيسية</a>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":390}}'>
+class Component extends DCLogic {
+renderVals() {
+var win = 'background: #14464A; box-shadow: 0 0 0 2px #F2C14E';
+var row = 'background: #0B2327';
+return {
+winSets: ['#2E9E5B', '#7EC8E3', '#222222', '#F08A24', '#8B5A2B', '#B5CC6A'],
+rows: [
+{ name: 'بوفهد', sets: 6, bank: 14, box: win },
+{ name: 'أنت', sets: 4, bank: 9, box: row },
+{ name: 'نورة', sets: 3, bank: 6, box: row },
+{ name: 'حمود', sets: 2, bank: 0, box: row }
+]
+};
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>نافذة اختيار الدفع</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div dir="rtl" style="width: 844px; height: 390px; box-sizing: border-box; padding: 24px; background: #071A1D; color: #F3EFE4; font-family: Tajawal, sans-serif; display: flex; align-items: center; justify-content: center">
+
+<div style="width: 680px; box-sizing: border-box; background: #0F2E33; border: 2px solid #2A5F62; border-radius: 16px; padding: 18px 24px; display: flex; flex-direction: column; gap: 12px">
+
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px">
+<span style="font-family: Lalezar, sans-serif; font-size: 26px; line-height: 1.1">ادفع 5 دنانير لـ بوفهد</span>
+<span style="font-size: 14px; color: #C9DAD8">لعب عليك: قرقش</span>
+</div>
+
+<div style="display: flex; gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; color: #C9DAD8">البنك · اختر كروت الدفع</span>
+<div style="display: flex; gap: 8px">
+<sc-for list="{{bank}}" as="m" hint-placeholder-count="4">
+<button style="width: 72px; height: 104px; padding: 0; border: 0; border-radius: 8px; background: #F7F4EC; color: #1B1B1B; overflow: hidden; display: flex; flex-direction: column; font-family: inherit; text-align: center; {{m.extra}}">
+<span style="height: 16px; flex: none; background: #2E9E5B"></span>
+<span style="font-size: 10px; color: #5A5A5A; margin-top: 4px">فلوس</span>
+<span style="font-family: Lalezar, sans-serif; font-size: 34px; line-height: 1; flex: 1; display: flex; align-items: center; justify-content: center">{{m.v}}</span>
+<span style="font-size: 11px; padding: 0 4px 8px; color: #3A3A3A">{{m.unit}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+
+<div style="flex: 1; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; color: #C9DAD8">العقارات · تندفع بقيمتها إذا خلص البنك</span>
+<div style="display: flex; gap: 6px; flex-wrap: wrap; opacity: 0.55">
+<sc-for list="{{props}}" as="s" hint-placeholder-count="3">
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border-radius: 6px; background: #14464A; font-size: 13px"><span style="width: 12px; height: 12px; border-radius: 2px; box-shadow: 0 0 0 1px #C9DAD8; background: {{s.c}}"></span>{{s.n}}</span>
+</sc-for>
+</div>
+<span style="font-size: 13px; color: #F3EFE4; margin-top: auto">ما فيه باقي: إذا دفعت أكثر من المطلوب ما يرجع لك الفرق.</span>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 14px">
+<span style="font-size: 16px; font-weight: 800">المحدد: 5 من 5 دنانير</span>
+<button style="margin-inline-start: auto; width: 200px; height: 48px; border: 0; border-radius: 10px; background: #F2C14E; color: #1B1B1B; font-family: Lalezar, sans-serif; font-size: 20px">ادفع</button>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":390}}'>
+class Component extends DCLogic {
+renderVals() {
+var on = 'box-shadow: 0 0 0 3px #F2C14E';
+return {
+bank: [
+{ v: 1, unit: 'دينار', extra: on },
+{ v: 2, unit: 'دينار', extra: 'opacity: 0.7' },
+{ v: 2, unit: 'دينار', extra: 'opacity: 0.7' },
+{ v: 4, unit: 'دنانير', extra: on }
+],
+props: [
+{ c: '#F4D03F', n: 'الخيران' },
+{ c: '#F4D03F', n: 'بنيدر' },
+{ c: '#F4D03F', n: 'الزور' },
+{ c: '#8E5BB5', n: 'حولي' },
+{ c: '#8E5BB5', n: 'الجابرية' },
+{ c: '#8B5A2B', n: 'الجهراء' }
+]
+};
+}
+}
+</script>
+</body>
+</html>

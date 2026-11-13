@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>غرفة الانتظار</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1B1B1B}a:hover{color:#1B1B1B}
+</style>
+</helmet>
+<div dir="rtl" style="width: 844px; height: 390px; box-sizing: border-box; padding: 20px 28px; background: #0F2E33; color: #F3EFE4; font-family: Tajawal, sans-serif; display: flex; gap: 20px">
+
+<div style="flex: 1; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<span style="font-family: Lalezar, sans-serif; font-size: 28px; line-height: 1">غرفة الانتظار</span>
+<span style="font-size: 14px; color: #C9DAD8">اللاعبون 2 من 4</span>
+</div>
+<div style="flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{seats}}" as="s" hint-placeholder-count="4">
+<div style="border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; {{s.box}}">
+<span style="width: 44px; height: 44px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: Lalezar, sans-serif; font-size: 22px; {{s.dot}}">{{s.initial}}</span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 16px; font-weight: 800">{{s.name}}</span>
+<span style="font-size: 13px; color: #C9DAD8">{{s.note}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="width: 300px; display: flex; flex-direction: column; gap: 12px">
+<div style="background: #0B2327; border-radius: 12px; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; align-items: center">
+<span style="font-size: 13px; color: #C9DAD8">كود الغرفة</span>
+<span style="font-family: Lalezar, sans-serif; font-size: 40px; line-height: 1; letter-spacing: 6px; color: #F2C14E; direction: ltr">K8D4Q</span>
+<span style="font-size: 12px; color: #C9DAD8">(مثال) شاركه مع أصحابك</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 14px; color: #C9DAD8">شرط الفوز · يختاره صاحب الغرفة</span>
+<div style="display: flex; gap: 8px">
+<button style="flex: 1; height: 46px; border: 0; border-radius: 10px; background: #F2C14E; color: #1B1B1B; font-family: inherit; font-size: 16px; font-weight: 800">6 أطقم مختلفة</button>
+<button style="flex: 1; height: 46px; border: 2px solid #2A5F62; border-radius: 10px; background: transparent; color: #F3EFE4; font-family: inherit; font-size: 16px; font-weight: 700">8 أطقم مختلفة</button>
+</div>
+</div>
+<a href="Main.dc.html" style="margin-top: auto; height: 54px; border-radius: 10px; background: #F2C14E; color: #1B1B1B; font-family: Lalezar, sans-serif; font-size: 24px; display: flex; align-items: center; justify-content: center; text-decoration: none">ابدأ اللعب</a>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":390}}'>
+class Component extends DCLogic {
+renderVals() {
+var on = 'background: #14464A; border: 2px solid #2A5F62; box-sizing: border-box';
+var off = 'background: transparent; border: 2px dashed #2A5F62; box-sizing: border-box';
+var dotOn = 'background: #2A5F62; color: #F3EFE4';
+var dotOff = 'background: #0B2327; color: #C9DAD8';
+return {
+seats: [
+{ box: on, dot: dotOn, initial: 'أ', name: 'أنت', note: 'صاحب الغرفة' },
+{ box: on, dot: dotOn, initial: 'ب', name: 'بوفهد', note: 'جاهز' },
+{ box: off, dot: dotOff, initial: '3', name: 'مقعد فاضي', note: 'بوت يكمل العدد عند البدء' },
+{ box: off, dot: dotOff, initial: '4', name: 'مقعد فاضي', note: 'بوت يكمل العدد عند البدء' }
+]
+};
+}
+}
+</script>
+</body>
+</html>

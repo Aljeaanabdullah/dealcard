@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الإعدادات</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#F3EFE4}a:hover{color:#F3EFE4}
+</style>
+</helmet>
+<div dir="rtl" style="width: 844px; height: 390px; box-sizing: border-box; padding: 24px 28px; background: #0F2E33; color: #F3EFE4; font-family: Tajawal, sans-serif; display: flex; flex-direction: column; align-items: center; gap: 16px">
+
+<div style="width: 560px; display: flex; align-items: center; justify-content: space-between">
+<span style="font-family: Lalezar, sans-serif; font-size: 30px; line-height: 1">الإعدادات</span>
+<a href="Home.dc.html" style="height: 46px; padding: 0 18px; box-sizing: border-box; border: 2px solid #F3EFE4; border-radius: 10px; font-family: Lalezar, sans-serif; font-size: 18px; display: flex; align-items: center; text-decoration: none">رجوع</a>
+</div>
+
+<div style="width: 560px; display: flex; flex-direction: column; gap: 10px">
+
+<div style="height: 72px; box-sizing: border-box; background: #0B2327; border-radius: 12px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between">
+<span style="font-size: 18px; font-weight: 800">اللغة</span>
+<div style="display: flex; gap: 8px">
+<button style="width: 110px; height: 46px; border: 0; border-radius: 10px; background: #F2C14E; color: #1B1B1B; font-family: inherit; font-size: 16px; font-weight: 800">عربي</button>
+<button style="width: 110px; height: 46px; border: 2px solid #2A5F62; border-radius: 10px; background: transparent; color: #F3EFE4; font-family: inherit; font-size: 16px; font-weight: 700">English</button>
+</div>
+</div>
+
+<div style="height: 72px; box-sizing: border-box; background: #0B2327; border-radius: 12px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between">
+<span style="font-size: 18px; font-weight: 800">الصوت</span>
+<button aria-pressed="true" aria-label="الصوت شغال" style="width: 84px; height: 46px; border: 0; border-radius: 23px; background: #F2C14E; padding: 4px; display: flex; justify-content: flex-end; align-items: center">
+<span style="width: 38px; height: 38px; border-radius: 50%; background: #0B2327"></span>
+</button>
+</div>
+
+<a href="CardsAction.dc.html" style="height: 72px; box-sizing: border-box; background: #0B2327; border-radius: 12px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; text-decoration: none">
+<span style="font-size: 18px; font-weight: 800">شرح القوانين</span>
+<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"></path></svg>
+</a>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":390}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

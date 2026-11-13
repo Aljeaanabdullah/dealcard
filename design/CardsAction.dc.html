@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<title>كروت الأكشن والإيجار</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div dir="rtl" style="width: 1640px; min-height: 1400px; box-sizing: border-box; padding: 40px; background: #0F2E33; color: #F3EFE4; font-family: Tajawal, sans-serif; display: flex; flex-direction: column; gap: 28px">
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-family: Lalezar, sans-serif; font-size: 48px; line-height: 1; color: #F2C14E">كروت الأكشن والإيجار</span>
+<span style="font-size: 18px; color: #C9DAD8">48 كرت أكشن (26 نوع) · 13 كرت إيجار · العملة: دينار · كرت الأكشن ما له قيمة فلوس</span>
+</div>
+
+<sc-for list="{{rows}}" as="row" hint-placeholder-count="4">
+<div style="display: flex; gap: 16px">
+<sc-for list="{{row}}" as="sec" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: Lalezar, sans-serif; font-size: 24px; line-height: 1.15">{{sec.title}}</span>
+<span style="font-size: 14px; color: #C9DAD8">{{sec.note}}</span>
+</div>
+<div style="display: flex; gap: 8px">
+<sc-for list="{{sec.cards}}" as="c" hint-placeholder-count="5">
+<div style="width: 144px; height: 212px; flex: none; border-radius: 10px; background: #F7F4EC; color: #1B1B1B; overflow: hidden; display: flex; flex-direction: column; text-align: center">
+<span style="height: 26px; flex: none; background: {{sec.band}}"></span>
+<span style="display: flex; justify-content: space-between; padding: 6px 10px 0; font-size: 12px; color: #5A5A5A"><span>{{sec.kind}}</span><span style="font-weight: 800; color: #1B1B1B; direction: ltr">{{c.n}}</span></span>
+<span style="font-family: Lalezar, sans-serif; font-size: 22px; line-height: 1.1; min-height: 56px; padding: 0 8px; display: flex; align-items: center; justify-content: center">{{c.name}}</span>
+<span style="font-size: 12.5px; line-height: 1.45; padding: 0 10px 10px; color: #2B2B2B">{{c.text}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1640,"height":1400}}'>
+class Component extends DCLogic {
+renderVals() {
+var pay = { title: 'أ) كروت الدفع', note: '10 كروت', kind: 'أكشن', band: '#F2C14E', cards: [
+{ name: 'قرقش', n: '×3', text: 'لاعب تختاره يدفع لك 5 دنانير' },
+{ name: 'قرض اسكان', n: '×1', text: 'لاعب تختاره يدفع لك 7 دنانير' },
+{ name: 'العيادي', n: '×3', text: 'كل اللاعبين يدفعون لك دينارين' },
+{ name: 'تثمين', n: '×1', text: 'تختار لاعب واحد يدفع إيجار جميع أطقمك الكاملة' },
+{ name: 'دوبل ايجار', n: '×2', text: 'ينلعب مع كرت إيجار ويضاعفه — ما ينحسب من الـ3 كروت' }
+] };
+var turn = { title: 'ج) كروت الدور واليد', note: '15 كرت', kind: 'أكشن', band: '#2BA6A0', cards: [
+{ name: 'اسحب 2', n: '×10', text: 'تسحب كرتين إضافيتين — ينحسب من الـ3 كروت' },
+{ name: 'زايد لعبه', n: '×2', text: 'تلعب 4 كروت بدل 3 بهذا الدور' },
+{ name: 'استريح', n: '×1', text: 'لاعب تختاره يفوّت دوره القادم' },
+{ name: 'اكشف', n: '×1', text: 'تشوف يد لاعب واحد' },
+{ name: 'طب وتخير', n: '×1', text: 'يصير أي أكشن باللعبة تختاره وتنفذه (حتى "راحت عليك")' }
+] };
+var steal = { title: 'ب) كروت السرقة والتبديل', note: '15 كرت · السرقة والتبديل العادي ما يشمل عقار داخل طقم كامل', kind: 'أكشن', band: '#E4572E', cards: [
+{ name: 'بوق لاتخاف', n: '×3', text: 'تسرق عقار واحد من لاعب (مو من طقم كامل)' },
+{ name: 'بوق لاتخاف دبل', n: '×1', text: 'تسرق عقارين من نفس اللاعب (مو من طقم كامل)' },
+{ name: 'بوق الجيكر', n: '×1', text: 'تسرق كرت جيكر من لاعب، بشرط الجيكر مو داخل طقم كامل' },
+{ name: 'بدل', n: '×3', text: 'تبدل عقار واحد عندك بعقار واحد عند لاعب (مو من طقم كامل)' },
+{ name: 'راحت عليك', n: '×2', text: 'تاخذ طقم كامل من لاعب (والجيكر اللي فيه ينتقل معه)' },
+{ name: 'اندبس', n: '×1', text: 'تبدل طقم كامل عندك بطقم كامل عند لاعب — ما ينلعب إلا إذا عندك طقم كامل' },
+{ name: 'ازاله', n: '×1', text: 'تزيل ورقة عقار من طقم كامل عند لاعب وتاخذها لأراضيك' },
+{ name: 'اطحس', n: '×1', text: 'تبدل كل كروت يدك مع كروت يد لاعب' },
+{ name: 'ورثتك', n: '×1', text: 'تختار كرت من يد لاعب بدون ما تشوفها وتاخذه' },
+{ name: 'مخالفه', n: '×1', text: 'تختار لاعبين وتحرق كرت من يد كل واحد — أنت تختار الكرت بدون ما تشوف' }
+] };
+var defend = { title: 'د) كروت الدفاع والرد', note: '8 كروت · كروت الرد تنلعب خارج دورك وما تنحسب من الـ3 كروت', kind: 'رد', band: '#1F3C88', cards: [
+{ name: 'مالك امل', n: '×3', text: 'يلغي أي أكشن ضدك، وينرد عليه بـ"مالك امل" ثاني' },
+{ name: 'حيور', n: '×1', text: 'أي أكشن ينلعب ضدك يرجع على اللاعب اللي لعبه وأنت المستفيد' },
+{ name: 'فزعه', n: '×1', text: 'لما لاعب يلعب أكشن ضد لاعب ثاني، تفزع له وتلغي الأكشن عنه' },
+{ name: 'حصانه', n: '×1', text: 'تنلعب بدورك مقدماً وتحميك من كل الأكشن لين يرجع دورك' },
+{ name: 'ماتشوف شر', n: '×1', text: 'يلغي إيجار مطلوب منك — مرة وحدة' },
+{ name: 'ادفعلي ايجاري', n: '×1', text: 'إذا انطلب منك إيجار، لاعب ثاني تختاره أنت يدفعه عنك' }
+] };
+var any = 'linear-gradient(90deg,#8B5A2B 0 10%,#7EC8E3 10% 20%,#B5CC6A 20% 30%,#8E5BB5 30% 40%,#F08A24 40% 50%,#D7372F 50% 60%,#F4D03F 60% 70%,#2E9E5B 70% 80%,#1F3C88 80% 90%,#222222 90% 100%)';
+function two(a, b) { return 'linear-gradient(90deg,' + a + ' 50%,' + b + ' 50%)'; }
+function rent(band, name, n, text) {
+return { title: '', note: '', kind: 'إيجار', band: band, cards: [{ name: name, n: n, text: text }] };
+}
+var rents = [
+rent(any, 'ادفع ايجار', '×3', 'شخص واحد — يصلح لأي لون. يدفع لاعب واحد تختاره'),
+rent(two('#F4D03F', '#D7372F'), 'ادفع ايجار الجميع', '×2', 'أصفر وأحمر — يدفع كل اللاعبين'),
+rent(two('#F08A24', '#8E5BB5'), 'ادفع ايجار الجميع', '×2', 'برتقالي وبنفسجي — يدفع كل اللاعبين'),
+rent(two('#7EC8E3', '#222222'), 'ادفع ايجار الجميع', '×2', 'أزرق فاتح وأسود — يدفع كل اللاعبين'),
+rent(two('#1F3C88', '#2E9E5B'), 'ادفع ايجار الجميع', '×2', 'أزرق غامق وأخضر — يدفع كل اللاعبين'),
+rent(two('#B5CC6A', '#222222'), 'ادفع ايجار الجميع', '×2', 'فستقي وأسود — يدفع كل اللاعبين')
+];
+rents[0].title = 'كروت الإيجار';
+rents[0].note = '13 كرت';
+for (var i = 1; i < rents.length; i++) { rents[i].title = ' '; rents[i].note = ' '; }
+return { rows: [[pay, turn], [steal], [defend], rents] };
+}
+}
+</script>
+</body>
+</html>
