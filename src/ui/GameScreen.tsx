@@ -15,7 +15,7 @@ interface GameScreenProps {
 }
 
 export function GameScreen({ winTarget, seed, onPlayAgain }: GameScreenProps) {
-  const { game, secondsLeft, event, play } = useGame(winTarget, seed);
+  const { game, secondsLeft, event, lastMove, play } = useGame(winTarget, seed);
 
   return (
     <TableScreen
@@ -24,6 +24,7 @@ export function GameScreen({ winTarget, seed, onPlayAgain }: GameScreenProps) {
       naming={LOCAL_NAMING}
       secondsLeft={secondsLeft}
       event={event}
+      lastMove={lastMove}
       onMove={play}
       onPlayAgain={onPlayAgain}
     />

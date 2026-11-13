@@ -113,6 +113,7 @@ export function OnlineGame({ transport, initial, onExit }: OnlineGameProps) {
       naming={naming}
       secondsLeft={Math.max(0, Math.ceil((snapshot.turnDeadline - now) / 1000))}
       event={snapshot.lastMove ? describeEvent(snapshot.lastMove, game, naming) : ''}
+      lastMove={snapshot.lastMove}
       onMove={(move) => request(transport.sendMove(code, move))}
       onPlayAgain={leave}
     />

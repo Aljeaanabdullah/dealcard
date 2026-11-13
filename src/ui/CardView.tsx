@@ -3,7 +3,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Card } from '../data/cards';
-import { cardInfo } from './describe';
+import { cardInfo, type CardInfo } from './describe';
 import { theme } from './theme';
 
 interface CardViewProps {
@@ -21,7 +21,7 @@ export function CardView({ card, width, height, selected = false, onPress, testI
 
   const body = (
     <View style={[styles.card, { width, height }, selected && styles.selected]}>
-      <View style={[styles.band, { backgroundColor: info.band, height: Math.max(10, height * 0.15) }]} />
+      <Band info={info} top height={Math.max(10, height * 0.15)} />
       <Text style={styles.kind} numberOfLines={1}>
         {info.kind}
       </Text>
@@ -33,6 +33,9 @@ export function CardView({ card, width, height, selected = false, onPress, testI
       <Text style={styles.sub} numberOfLines={1}>
         {info.sub}
       </Text>
+      {info.bandBottom !== undefined || info.stripes !== undefined ? (
+        <Band info={info} top={false} height={Math.max(10, height * 0.15)} />
+      ) : null}
     </View>
   );
 
@@ -42,6 +45,21 @@ export function CardView({ card, width, height, selected = false, onPress, testI
       {body}
     </Pressable>
   );
+}
+
+/** شريط لون الكرت. كرت الإيجار له شريطين: لون فوق ولون تحت، أو كل الألوان إذا يصلح لأي لون. */
+function Band({ info, top, height }: { readonly info: CardInfo; readonly top: boolean; readonly height: number }) {
+  if (info.stripes !== undefined) {
+    return (
+      <View style={[styles.band, styles.stripes, { height }]}>
+        {info.stripes.map((color) => (
+          <View key={color} style={[styles.stripe, { backgroundColor: color }]} />
+        ))}
+      </View>
+    );
+  }
+  const color = top ? info.band : (info.bandBottom ?? info.band);
+  return <View style={[styles.band, { backgroundColor: color, height }]} />;
 }
 
 /** ظهر الكرت (كومة السحب). */
@@ -66,6 +84,12 @@ const styles = StyleSheet.create({
   },
   band: {
     alignSelf: 'stretch',
+  },
+  stripes: {
+    flexDirection: 'row',
+  },
+  stripe: {
+    flex: 1,
   },
   kind: {
     fontSize: 10,

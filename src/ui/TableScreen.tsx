@@ -2,7 +2,7 @@
 // شاشة عرض فقط: تاخذ الحالة (بعد إخفاء أيدي الباقين) وحركاتي القانونية، وتخدم اللعب المحلي والأونلاين.
 // وكومة السحب والنار بالوسط — prd.md القسم 7، والشكل من design/Main.dc.html
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,7 +13,7 @@ import { cardValue } from '../engine/payment';
 import { completeColors, countInColor, isSetComplete } from '../engine/sets';
 import type { GameState, PlayerState } from '../engine/state';
 import { CardBack, CardView } from './CardView';
-import { cardInfo, colorName, describeEffect, seatName, type Naming } from './describe';
+import { cardInfo, colorName, describeEffect, moveTargets, seatName, type Naming } from './describe';
 import { EndScreen } from './EndScreen';
 import { OptionsModal, PayModal } from './modals';
 import { S } from './strings';
@@ -48,18 +48,25 @@ function OpponentPanel({
   seat,
   row,
   naming,
+  targeted,
 }: {
   readonly game: GameState;
   readonly seat: number;
   readonly row: boolean;
   readonly naming: Naming;
+  /** انلعب عليه آخر كرت: ينحط عليه سهم */
+  readonly targeted: boolean;
 }) {
   const player = game.players[seat];
   if (!player) return null;
   const active = game.turn.seat === seat;
 
   return (
-    <View style={[styles.panel, row ? styles.panelRow : styles.panelColumn, active && styles.panelActive]}>
+    <View
+      testID={targeted ? `targeted-${seat}` : undefined}
+      style={[styles.panel, row ? styles.panelRow : styles.panelColumn, active && styles.panelActive, targeted && styles.panelTargeted]}
+    >
+      {targeted ? <TargetArrow /> : null}
       <View>
         <Text style={styles.name}>
           {seatName(seat, naming)}
@@ -75,6 +82,19 @@ function OpponentPanel({
   );
 }
 
+/** سهم على اللاعب اللي انلعب ضده الكرت. */
+function TargetArrow() {
+  return (
+    <View style={styles.arrowRow} accessibilityLabel={S.targeted}>
+      <View style={styles.arrow} />
+      <Text style={styles.arrowText}>{S.targeted}</Text>
+    </View>
+  );
+}
+
+/** مهلة قصيرة قبل الانتقال التلقائي للاعب التالي، عشان اللاعب يشوف كرته الأخير. */
+const AUTO_END_DELAY_MS = 600;
+
 interface TableScreenProps {
   /** حالة اللعبة مثل ما يشوفها هذا اللاعب (أيدي الباقين مخفية) */
   readonly game: GameState;
@@ -83,16 +103,32 @@ interface TableScreenProps {
   readonly naming: Naming;
   readonly secondsLeft: number;
   readonly event: string;
+  /** آخر حركة انلعبت: يتحدد منها مين انلعب ضده الكرت */
+  readonly lastMove: Move | null;
   readonly onMove: (move: Move) => void;
   readonly onPlayAgain: () => void;
 }
 
-export function TableScreen({ game, moves, naming, secondsLeft, event, onMove, onPlayAgain }: TableScreenProps) {
+export function TableScreen({ game, moves, naming, secondsLeft, event, lastMove, onMove, onPlayAgain }: TableScreenProps) {
   const { width, height } = useWindowDimensions();
   const [picked, setPicked] = useState<{ readonly title: string; readonly moves: readonly Move[] } | null>(null);
 
   const HUMAN_SEAT = naming.mySeat;
   const play = onMove;
+
+  // إذا لعبت كل كروت دوري (أو خلصت رمي الزايد) وما بقى إلا إنهاء الدور، الدور ينتقل للاعب التالي تلقائياً.
+  const onlyMove = moves.length === 1 ? moves[0] : undefined;
+  const playsDone = game.turn.playsUsed >= MAX_PLAYS_PER_TURN + game.extraPlays || game.turn.discarding;
+  const autoEnd = game.winner === null && playsDone && onlyMove?.type === 'endTurn' && onlyMove.seat === HUMAN_SEAT;
+  useEffect(() => {
+    if (!autoEnd) return undefined;
+    const timer = setTimeout(() => onMove({ type: 'endTurn', seat: HUMAN_SEAT }), AUTO_END_DELAY_MS);
+    return () => clearTimeout(timer);
+    // onMove يتغير مع كل عرض؛ الانتقال مربوط بحالة الدور فقط.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEnd, HUMAN_SEAT]);
+
+  const targets = moveTargets(lastMove);
   const me = game.players[HUMAN_SEAT];
   if (!me) return null;
   if (game.winner !== null) return <EndScreen game={game} naming={naming} onPlayAgain={onPlayAgain} />;
@@ -151,14 +187,14 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, onMove, o
           </Text>
         </View>
         <View style={styles.flex}>
-          <OpponentPanel game={game} seat={topSeat} row naming={naming} />
+          <OpponentPanel game={game} seat={topSeat} row naming={naming} targeted={targets.includes(topSeat)} />
         </View>
       </View>
 
       {/* الصف الأوسط: لاعب على كل جانب، والكومتين بالوسط */}
       <View style={styles.middleRow}>
         <View style={{ width: sideWidth }}>
-          <OpponentPanel game={game} seat={leftSeat} row={false} naming={naming} />
+          <OpponentPanel game={game} seat={leftSeat} row={false} naming={naming} targeted={targets.includes(leftSeat)} />
         </View>
         <View style={styles.table}>
           <View style={styles.piles}>
@@ -186,13 +222,17 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, onMove, o
           </Text>
         </View>
         <View style={{ width: sideWidth }}>
-          <OpponentPanel game={game} seat={rightSeat} row={false} naming={naming} />
+          <OpponentPanel game={game} seat={rightSeat} row={false} naming={naming} targeted={targets.includes(rightSeat)} />
         </View>
       </View>
 
       {/* الصف السفلي: بنكي وعقاراتي، يدي، وأزرار الدور */}
       <View style={[styles.bottomRow, { height: bottomHeight }]}>
-        <View style={[styles.panel, styles.mine, { width: sideWidth }]}>
+        <View
+          testID={targets.includes(HUMAN_SEAT) ? `targeted-${HUMAN_SEAT}` : undefined}
+          style={[styles.panel, styles.mine, { width: sideWidth }, targets.includes(HUMAN_SEAT) && styles.panelTargeted]}
+        >
+          {targets.includes(HUMAN_SEAT) ? <TargetArrow /> : null}
           <View style={styles.between}>
             <Text style={styles.name}>
               {S.you}
@@ -349,6 +389,29 @@ const styles = StyleSheet.create({
   },
   panelActive: {
     borderColor: theme.gold,
+  },
+  panelTargeted: {
+    borderColor: theme.danger,
+  },
+  arrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  arrow: {
+    width: 0,
+    height: 0,
+    borderTopWidth: 6,
+    borderBottomWidth: 6,
+    borderLeftWidth: 10,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftColor: theme.danger,
+  },
+  arrowText: {
+    color: theme.danger,
+    fontSize: 11,
+    fontWeight: '800',
   },
   status: {
     justifyContent: 'center',

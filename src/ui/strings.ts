@@ -68,6 +68,7 @@ export const S = {
   properties: 'العقارات',
   completeSets: (n: number, target: number) => `الأطقم الكاملة ${n} من ${target}`,
   immune: 'حصانه',
+  targeted: 'انلعب عليه',
   skipped: 'استريح',
   looseBuilding: 'بدون طقم',
   draw: 'اسحب',

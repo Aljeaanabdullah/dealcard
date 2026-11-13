@@ -35,7 +35,12 @@ export function actionName(action: ActionId): string {
 }
 
 export interface CardInfo {
+  /** لون الشريط العلوي */
   readonly band: string;
+  /** لون الشريط السفلي (كرت إيجار بلونين: لون فوق ولون تحت) */
+  readonly bandBottom?: string;
+  /** شريط بكل الألوان (كرت الإيجار اللي يصلح لأي لون) */
+  readonly stripes?: readonly string[];
   readonly kind: string;
   readonly name: string;
   readonly sub: string;
@@ -62,11 +67,20 @@ export function cardInfo(card: Card): CardInfo {
     case 'rent': {
       const def = RENTS.find((d) => d.id === card.rent);
       if (!def || def.colors === 'any') {
-        return { band: BAND.rentAny, kind: S.kindRent, name: S.rentOne, sub: S.anyColor };
+        // يصلح لأي لون: الشريط فوق وتحت بكل ألوان الأطقم.
+        return {
+          band: BAND.rentAny,
+          stripes: Object.values(SET_COLORS),
+          kind: S.kindRent,
+          name: S.rentOne,
+          sub: S.anyColor,
+        };
       }
-      const first = def.colors[0];
+      // كرت بلونين: لون فوق ولون تحت.
+      const [first, second] = def.colors;
       return {
         band: first ? SET_COLORS[first] : BAND.rentAny,
+        ...(second ? { bandBottom: SET_COLORS[second] } : {}),
         kind: S.kindRent,
         name: S.rentAll,
         sub: def.colors.map(colorName).join(' / '),
@@ -103,6 +117,20 @@ function names(cardIds: readonly string[] | undefined): string {
 
 function join(parts: (string | undefined | false)[]): string {
   return parts.filter((part): part is string => typeof part === 'string' && part.length > 0).join(' · ');
+}
+
+/** المقاعد اللي انلعب عليها الكرت (عشان ينحط عليهم سهم بالطاولة). */
+export function moveTargets(move: Move | null): number[] {
+  if (!move) return [];
+  const others = [0, 1, 2, 3].filter((seat) => seat !== move.seat);
+  if (move.type === 'playRent') return move.targetSeat === undefined ? others : [move.targetSeat];
+  if (move.type !== 'playAction') return [];
+  if (move.burns !== undefined) return move.burns.map((burn) => burn.seat);
+  if (move.targetSeat !== undefined) return [move.targetSeat];
+  // "العيادي" على كل اللاعبين.
+  const card = findCard(move.cardId);
+  const action = move.asAction ?? (card?.kind === 'action' ? card.action : undefined);
+  return action === 'eyadi' ? others : [];
 }
 
 /** وصف حركة كخيار للاعب (بدون اسم اللاعب). */
