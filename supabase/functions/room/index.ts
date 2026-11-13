@@ -104,7 +104,8 @@ Deno.serve(async (req) => {
   // نعيد المحاولة إذا لاعب ثاني حفظ بنفس اللحظة (فحص النسخة).
   for (let attempt = 0; attempt < 4; attempt++) {
     const { data: row } = await admin.from('rooms').select('state, version').eq('code', code).maybeSingle();
-    if (!row) return json({ ok: false, error: 'notInRoom' }, 404);
+    // أخطاء اللعب ترجع بحالة 200 مع ok: false عشان التطبيق يقرأ سببها (غير 200 = خطأ اتصال).
+    if (!row) return json({ ok: false, error: 'notInRoom' });
     const room = row.state as RoomLike;
 
     let result: ActionResult;
