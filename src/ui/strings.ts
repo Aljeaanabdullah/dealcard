@@ -1,0 +1,110 @@
+// كل النصوص الظاهرة للاعب تمر من هنا (بدون نصوص مكتوبة مباشرة داخل الواجهة).
+// المرحلة 10 تحوّل هذا الملف لملفات ترجمة عربي + إنجليزي.
+
+export const S = {
+  appName: 'DEAL Q8',
+  tagline: 'لعبة كروت خليجية لأربعة لاعبين',
+
+  // شاشة البداية
+  playVsBots: 'لعب ضد البوتات',
+  winCondition: 'شرط الفوز',
+  sets: (n: number) => `${n} أطقم مختلفة`,
+  start: 'ابدأ اللعب',
+
+  // اللاعبين
+  you: 'أنت',
+  bot: (n: number) => `بوت ${n}`,
+
+  // الطاولة
+  yourTurn: 'دورك',
+  turnOf: (name: string) => `دور ${name}`,
+  played: (used: number, limit: number) => `لعبت ${used} من ${limit}`,
+  drawPile: 'كومة السحب',
+  fire: 'النار',
+  inHand: (n: number) => `باليد ${n}`,
+  bank: (n: number) => `البنك ${n}`,
+  myBank: (n: number) => `البنك · ${n}`,
+  properties: 'العقارات',
+  completeSets: (n: number, target: number) => `الأطقم الكاملة ${n} من ${target}`,
+  immune: 'حصانه',
+  skipped: 'استريح',
+  looseBuilding: 'بدون طقم',
+  draw: 'اسحب',
+  endTurn: 'إنهاء الدور',
+  discardFirst: 'ارم الزايد',
+  waiting: 'انتظر...',
+  revealedHand: (name: string) => `يد ${name}:`,
+  tapCard: 'اضغط كرت عشان تلعبه',
+
+  // أنواع الكروت
+  kindProperty: 'عقار',
+  kindMoney: 'فلوس',
+  kindAction: 'أكشن',
+  kindDefense: 'رد',
+  kindRent: 'إيجار',
+  kindBuilding: 'مبنى',
+  joker: 'جيكر',
+  dinar: 'دينار',
+  value: (n: number) => `القيمة ${n}`,
+  rentBonus: (n: number) => `الإيجار +${n}`,
+  rentOne: 'ايجار شخص',
+  rentAll: 'ايجار الجميع',
+  anyColor: 'أي لون',
+
+  // النوافذ
+  cancel: 'رجوع',
+  chooseAction: 'وش تبي تسوي بالكرت؟',
+  chooseTarget: 'اختر اللاعب',
+  noMoves: 'ما فيه لعبة لهالكرت الحين',
+  payTitle: (amount: number, name: string) => `ادفع ${amount} لـ ${name}`,
+  paySelected: (selected: number, amount: number) => `المحدد: ${selected} من ${amount}`,
+  payHint: 'من البنك أولاً، ثم المباني، ثم العقارات. ما فيه باقي.',
+  payAuto: 'اختيار تلقائي',
+  payConfirm: 'ادفع',
+  respondTitleOnYou: (name: string) => `${name} لعب عليك`,
+  respondTitleOnOther: (name: string, target: string) => `${name} لعب على ${target}`,
+  respondCounter: (name: string, card: string) => `${name} رد بـ ${card}`,
+  noResponse: 'ما أرد',
+
+  // وصف الحركات
+  playProperty: 'حط العقار',
+  bankMoney: 'حطه بالبنك',
+  playJokerIn: (color: string) => `حط الجيكر مع ${color}`,
+  moveJokerTo: (color: string) => `انقل الجيكر إلى ${color}`,
+  buildOn: (color: string) => `حطه على طقم ${color}`,
+  rentOf: (color: string, amount: number) => `إيجار ${color} (${amount})`,
+  from: (name: string) => `من ${name}`,
+  fromAll: 'من الجميع',
+  withDouble: 'مع دوبل ايجار',
+  on: (name: string) => `على ${name}`,
+  as: (card: string) => `كـ ${card}`,
+  takes: (what: string) => `ياخذ: ${what}`,
+  gives: (what: string) => `يعطي: ${what}`,
+  wholeSet: (color: string) => `طقم ${color}`,
+  handCard: (n: number) => `الكرت رقم ${n} باليد`,
+  inColor: (color: string) => `بلون ${color}`,
+  amount: (n: number) => `${n} دينار`,
+  burn: 'احرقه بالنار (بدون تنفيذ)',
+  discard: 'ارمه بالنار',
+  respondWith: (card: string) => `رد بـ ${card}`,
+  payer: (name: string) => `يدفع عني: ${name}`,
+  cancelOnly: 'يلغي فقط',
+
+  // الأحداث
+  eventDraw: (name: string) => `${name} سحب`,
+  eventEndTurn: (name: string) => `${name} أنهى دوره`,
+  eventPlayed: (name: string, what: string) => `${name}: ${what}`,
+  eventPaid: (name: string, amount: number) => `${name} دفع ${amount}`,
+  eventPassed: (name: string) => `${name} ما رد`,
+  eventTimeout: 'انتهى وقتك وانتهى دورك تلقائياً',
+
+  // نهاية اللعبة
+  winner: 'الفائز',
+  youWon: 'مبروك، فزت!',
+  completed: (n: number) => `كمّل ${n} أطقم مختلفة`,
+  summary: 'ملخص اللعبة',
+  player: 'اللاعب',
+  setsColumn: 'الأطقم الكاملة',
+  bankColumn: 'البنك',
+  playAgain: 'إعادة اللعب',
+} as const;

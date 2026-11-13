@@ -21,3 +21,6 @@ export const MAX_HAND_SIZE = 7;
 /** شرط الفوز: عدد الأطقم الكاملة المختلفة، يختاره صاحب الغرفة */
 export const WIN_TARGETS = [6, 8] as const;
 export type WinTarget = (typeof WIN_TARGETS)[number];
+
+/** مدة الدور بالثواني. إذا انتهى الوقت ينتهي الدور تلقائياً. */
+export const TURN_SECONDS = 90;
