@@ -11,6 +11,47 @@ export const S = {
   sets: (n: number) => `${n} أطقم مختلفة`,
   start: 'ابدأ اللعب',
 
+  // الرئيسية
+  nickname: 'الاسم المستعار',
+  namePlaceholder: 'اكتب اسمك',
+  createRoom: 'إنشاء غرفة خاصة',
+  joinByCode: 'دخول',
+  codePlaceholder: 'كود الغرفة',
+  onlineUnavailable: 'اللعب أونلاين يحتاج إعداد Supabase',
+
+  // غرفة الانتظار
+  lobbyTitle: 'غرفة الانتظار',
+  playersCount: (n: number) => `اللاعبون ${n} من 4`,
+  roomCode: 'كود الغرفة',
+  shareCode: 'شاركه مع أصحابك',
+  hostChooses: 'شرط الفوز · يختاره صاحب الغرفة',
+  host: 'صاحب الغرفة',
+  joined: 'داخل',
+  emptySeat: 'مقعد فاضي',
+  botWillFill: 'بوت يكمل العدد عند البدء',
+  waitingHost: 'ننتظر صاحب الغرفة يبدأ',
+  leave: 'خروج',
+  disconnected: 'انقطع',
+
+  // أخطاء الاتصال
+  netError: (code: string): string => {
+    switch (code) {
+      case 'nameRequired':
+        return 'اكتب اسمك أول';
+      case 'roomFull':
+        return 'الغرفة مليانة';
+      case 'alreadyStarted':
+        return 'اللعبة بدأت';
+      case 'notInRoom':
+        return 'الكود غلط';
+      case 'network':
+      case 'unauthorized':
+        return 'ما قدرنا نتصل بالخادم';
+      default:
+        return 'صار خطأ، حاول مرة ثانية';
+    }
+  },
+
   // اللاعبين
   you: 'أنت',
   bot: (n: number) => `بوت ${n}`,

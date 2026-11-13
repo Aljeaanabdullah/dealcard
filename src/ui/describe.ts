@@ -1,17 +1,29 @@
 // معلومات عرض الكروت، ووصف الحركات والتأثيرات كنص للاعب.
 
-import { ACTIONS, BUILDINGS, RENTS, type ActionId, type Card } from '../data/cards';
+import { ACTIONS, buildDeck, BUILDINGS, RENTS, type ActionId, type Card } from '../data/cards';
 import { getColor, type ColorId } from '../data/colors';
 import type { Move } from '../engine/moves';
 import { cardValue, rentFor } from '../engine/payment';
-import { allCards, type Effect, type GameState } from '../engine/state';
+import type { Effect, GameState } from '../engine/state';
 import { S } from './strings';
 import { BAND, SET_COLORS } from './theme';
 
+/** مقعد اللاعب باللعب المحلي ضد البوتات. */
 export const HUMAN_SEAT = 0;
 
-export function seatName(seat: number): string {
-  return seat === HUMAN_SEAT ? S.you : S.bot(seat);
+/** من أنا، وأسماء اللاعبين حسب المقعد. الاسم الفاضي = بوت. */
+export interface Naming {
+  readonly mySeat: number;
+  readonly names: readonly string[];
+}
+
+/** التسمية باللعب المحلي: أنا بالمقعد 0 والباقي بوتات. */
+export const LOCAL_NAMING: Naming = { mySeat: HUMAN_SEAT, names: ['', '', '', ''] };
+
+export function seatName(seat: number, naming: Naming): string {
+  if (seat === naming.mySeat) return S.you;
+  const name = naming.names[seat] ?? '';
+  return name.length > 0 ? name : S.bot(seat);
 }
 
 export function colorName(color: ColorId): string {
@@ -73,17 +85,20 @@ export function cardInfo(card: Card): CardInfo {
   }
 }
 
-function findCard(state: GameState, cardId: string | undefined): Card | undefined {
-  return cardId === undefined ? undefined : allCards(state).find((card) => card.id === cardId);
+/** كل كروت اللعبة حسب المعرّف. المعرّفات ثابتة، فالبحث ما يحتاج الحالة (وأيدي الباقين مخفية أونلاين). */
+const DECK = new Map<string, Card>(buildDeck().map((card) => [card.id, card]));
+
+function findCard(cardId: string | undefined): Card | undefined {
+  return cardId === undefined ? undefined : DECK.get(cardId);
 }
 
-function cardLabel(state: GameState, cardId: string | undefined): string {
-  const card = findCard(state, cardId);
+function cardLabel(cardId: string | undefined): string {
+  const card = findCard(cardId);
   return card ? cardInfo(card).name : '';
 }
 
-function names(state: GameState, cardIds: readonly string[] | undefined): string {
-  return (cardIds ?? []).map((id) => cardLabel(state, id)).join('، ');
+function names(cardIds: readonly string[] | undefined): string {
+  return (cardIds ?? []).map((id) => cardLabel(id)).join('، ');
 }
 
 function join(parts: (string | undefined | false)[]): string {
@@ -91,7 +106,7 @@ function join(parts: (string | undefined | false)[]): string {
 }
 
 /** وصف حركة كخيار للاعب (بدون اسم اللاعب). */
-export function describeMove(move: Move, state: GameState): string {
+export function describeMove(move: Move, state: GameState, naming: Naming): string {
   const me = state.players[move.seat];
 
   switch (move.type) {
@@ -121,17 +136,17 @@ export function describeMove(move: Move, state: GameState): string {
       const amount = move.doubleCardId !== undefined ? base * 2 : base;
       return join([
         S.rentOf(colorName(move.color), amount),
-        move.targetSeat === undefined ? S.fromAll : S.from(seatName(move.targetSeat)),
+        move.targetSeat === undefined ? S.fromAll : S.from(seatName(move.targetSeat, naming)),
         move.doubleCardId !== undefined && S.withDouble,
       ]);
     }
     case 'playAction': {
-      const picks = (move.burns ?? []).map((b) => `${seatName(b.seat)}: ${S.handCard(b.handIndex + 1)}`).join('، ');
+      const picks = (move.burns ?? []).map((b) => `${seatName(b.seat, naming)}: ${S.handCard(b.handIndex + 1)}`).join('، ');
       return join([
         move.asAction !== undefined && S.as(actionName(move.asAction)),
-        move.targetSeat !== undefined && S.on(seatName(move.targetSeat)),
-        move.targetCardIds !== undefined && S.takes(names(state, move.targetCardIds)),
-        move.ownCardId !== undefined && S.gives(cardLabel(state, move.ownCardId)),
+        move.targetSeat !== undefined && S.on(seatName(move.targetSeat, naming)),
+        move.targetCardIds !== undefined && S.takes(names(move.targetCardIds)),
+        move.ownCardId !== undefined && S.gives(cardLabel(move.ownCardId)),
         move.ownColor !== undefined && S.gives(S.wholeSet(colorName(move.ownColor))),
         move.color !== undefined &&
           (move.targetCardIds !== undefined ? S.inColor(colorName(move.color)) : S.takes(S.wholeSet(colorName(move.color)))),
@@ -141,13 +156,13 @@ export function describeMove(move: Move, state: GameState): string {
     }
     case 'respond': {
       if (move.cardId === undefined) return S.noResponse;
-      const card = findCard(state, move.cardId);
+      const card = findCard(move.cardId);
       const cardName = move.as !== undefined ? actionName(move.as) : card ? cardInfo(card).name : '';
       const viaTeb = card?.kind === 'action' && card.action === 'tebWetkhayyar';
       return join([
         S.respondWith(viaTeb ? `${actionName('tebWetkhayyar')} ${S.as(cardName)}` : cardName),
-        move.payerSeat !== undefined && S.payer(seatName(move.payerSeat)),
-        move.bounce?.targetCardIds !== undefined && S.takes(names(state, move.bounce.targetCardIds)),
+        move.payerSeat !== undefined && S.payer(seatName(move.payerSeat, naming)),
+        move.bounce?.targetCardIds !== undefined && S.takes(names(move.bounce.targetCardIds)),
         move.bounce?.color !== undefined &&
           (move.bounce.targetCardIds !== undefined
             ? S.inColor(colorName(move.bounce.color))
@@ -159,13 +174,13 @@ export function describeMove(move: Move, state: GameState): string {
 }
 
 /** وصف التأثير المنتظر بنافذة الرد. */
-export function describeEffect(effect: Effect, state: GameState): string {
+export function describeEffect(effect: Effect): string {
   const title = effect.action === 'rent' ? S.kindRent : actionName(effect.action);
   return join([
     title,
     effect.amount > 0 && S.amount(effect.amount),
-    effect.params.targetCardIds !== undefined && S.takes(names(state, effect.params.targetCardIds)),
-    effect.params.ownCardId !== undefined && S.gives(cardLabel(state, effect.params.ownCardId)),
+    effect.params.targetCardIds !== undefined && S.takes(names(effect.params.targetCardIds)),
+    effect.params.ownCardId !== undefined && S.gives(cardLabel(effect.params.ownCardId)),
     effect.params.ownColor !== undefined && S.gives(S.wholeSet(colorName(effect.params.ownColor))),
     effect.params.color !== undefined &&
       effect.params.targetCardIds === undefined &&
@@ -174,8 +189,8 @@ export function describeEffect(effect: Effect, state: GameState): string {
 }
 
 /** نص الحدث اللي يطلع بعد حركة لاعب. */
-export function describeEvent(move: Move, state: GameState): string {
-  const name = seatName(move.seat);
+export function describeEvent(move: Move, state: GameState, naming: Naming): string {
+  const name = seatName(move.seat, naming);
   switch (move.type) {
     case 'draw':
       return S.eventDraw(name);
@@ -183,18 +198,18 @@ export function describeEvent(move: Move, state: GameState): string {
       return S.eventEndTurn(name);
     case 'pay': {
       const paid = move.cardIds.reduce((total, id) => {
-        const card = findCard(state, id);
+        const card = findCard(id);
         return total + (card ? cardValue(card) : 0);
       }, 0);
       return S.eventPaid(name, paid);
     }
     case 'respond':
-      return move.cardId === undefined ? S.eventPassed(name) : S.eventPlayed(name, describeMove(move, state));
+      return move.cardId === undefined ? S.eventPassed(name) : S.eventPlayed(name, describeMove(move, state, naming));
     case 'discard':
       return S.eventPlayed(name, S.discard);
     default: {
-      const cardName = 'cardId' in move ? cardLabel(state, move.cardId) : '';
-      return S.eventPlayed(name, join([cardName, describeMove(move, state)]));
+      const cardName = 'cardId' in move ? cardLabel(move.cardId) : '';
+      return S.eventPlayed(name, join([cardName, describeMove(move, state, naming)]));
     }
   }
 }

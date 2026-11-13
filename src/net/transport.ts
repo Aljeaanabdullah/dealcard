@@ -1,0 +1,23 @@
+// واجهة الاتصال بالخادم. التطبيق يكلم هذي الواجهة فقط، وتحتها تطبيقين:
+// - memoryHost: خادم داخل الذاكرة (للاختبار والتجربة بدون إنترنت).
+// - supabaseTransport: الخادم الحقيقي على Supabase.
+
+import type { Move } from '../engine/moves';
+import type { RoomError, RoomSnapshot } from './room';
+
+export type NetError = RoomError | 'network' | 'unauthorized';
+
+export type NetResult =
+  | { readonly ok: true; readonly snapshot: RoomSnapshot | null }
+  | { readonly ok: false; readonly error: NetError };
+
+export interface Transport {
+  createRoom(name: string): Promise<NetResult>;
+  joinRoom(code: string, name: string): Promise<NetResult>;
+  setWinTarget(code: string, winTarget: number): Promise<NetResult>;
+  start(code: string): Promise<NetResult>;
+  sendMove(code: string, move: Move): Promise<NetResult>;
+  leave(code: string): Promise<NetResult>;
+  /** يتابع تحديثات الغرفة للاعب. يرجّع دالة توقف المتابعة. */
+  subscribe(code: string, onSnapshot: (snapshot: RoomSnapshot) => void): () => void;
+}

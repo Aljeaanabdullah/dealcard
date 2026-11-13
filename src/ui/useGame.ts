@@ -10,7 +10,7 @@ import { suggestPayment } from '../engine/payment';
 import { createRng } from '../engine/rng';
 import { createGame, type GameState } from '../engine/state';
 import { forceEndTurn } from '../engine/timeout';
-import { describeEvent, HUMAN_SEAT } from './describe';
+import { describeEvent, HUMAN_SEAT, LOCAL_NAMING } from './describe';
 import { S } from './strings';
 
 /** تأخير حركة البوت بالملي ثانية حتى يبدو طبيعياً. */
@@ -39,7 +39,7 @@ function reducer(session: Session, action: SessionAction): Session {
       return {
         game: result.state,
         secondsLeft: turnChanged ? TURN_SECONDS : session.secondsLeft,
-        event: describeEvent(action.move, session.game),
+        event: describeEvent(action.move, session.game, LOCAL_NAMING),
         error: null,
       };
     }

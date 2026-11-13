@@ -7,7 +7,7 @@ import type { Card } from '../data/cards';
 import type { Move } from '../engine/moves';
 import { cardValue, isValidPayment, paymentTiers, suggestPayment } from '../engine/payment';
 import type { GameState, PlayerState } from '../engine/state';
-import { actionName, cardInfo, describeMove, seatName } from './describe';
+import { actionName, cardInfo, describeMove, seatName, type Naming } from './describe';
 import { S } from './strings';
 import { theme } from './theme';
 
@@ -22,21 +22,22 @@ function asKey(move: Move): string | undefined {
 }
 
 /** مفتاح تجميع الحركة حسب اللاعب المستهدف. */
-function targetKey(move: Move): string | undefined {
+function targetKey(move: Move, naming: Naming): string | undefined {
   if (move.type === 'playAction') {
-    if (move.burns !== undefined) return move.burns.map((b) => seatName(b.seat)).join(' + ');
-    return move.targetSeat === undefined ? undefined : seatName(move.targetSeat);
+    if (move.burns !== undefined) return move.burns.map((b) => seatName(b.seat, naming)).join(' + ');
+    return move.targetSeat === undefined ? undefined : seatName(move.targetSeat, naming);
   }
-  if (move.type === 'playRent') return move.targetSeat === undefined ? undefined : seatName(move.targetSeat);
+  if (move.type === 'playRent') return move.targetSeat === undefined ? undefined : seatName(move.targetSeat, naming);
   return undefined;
 }
 
 /** يرتب الخيارات: إذا كثيرة تتجمع أولاً حسب الكرت ثم حسب اللاعب المستهدف. */
-function buildEntries(moves: readonly Move[], state: GameState): Entry[] {
-  const leaves = (list: readonly Move[]): Entry[] => list.map((move) => ({ label: describeMove(move, state), moves: [move] }));
+function buildEntries(moves: readonly Move[], state: GameState, naming: Naming): Entry[] {
+  const leaves = (list: readonly Move[]): Entry[] =>
+    list.map((move) => ({ label: describeMove(move, state, naming), moves: [move] }));
   if (moves.length <= 6) return leaves(moves);
 
-  for (const keyOf of [asKey, targetKey]) {
+  for (const keyOf of [asKey, (move: Move) => targetKey(move, naming)]) {
     const groups = new Map<string, Move[]>();
     const rest: Move[] = [];
     for (const move of moves) {
@@ -49,7 +50,7 @@ function buildEntries(moves: readonly Move[], state: GameState): Entry[] {
     }
     if (groups.size >= 2) {
       const grouped: Entry[] = [...groups.entries()].map(([label, list]) =>
-        list.length === 1 ? { label: describeMove(list[0] as Move, state), moves: list } : { label, moves: list },
+        list.length === 1 ? { label: describeMove(list[0] as Move, state, naming), moves: list } : { label, moves: list },
       );
       return [...grouped, ...leaves(rest)];
     }
@@ -62,16 +63,17 @@ interface OptionsModalProps {
   readonly subtitle?: string;
   readonly moves: readonly Move[];
   readonly state: GameState;
+  readonly naming: Naming;
   readonly onPick: (move: Move) => void;
   /** بدون onClose = النافذة إجبارية (مثل الرد) */
   readonly onClose?: () => void;
 }
 
-export function OptionsModal({ title, subtitle, moves, state, onPick, onClose }: OptionsModalProps) {
+export function OptionsModal({ title, subtitle, moves, state, naming, onPick, onClose }: OptionsModalProps) {
   // مسار الاختيار: كل مستوى يضيّق الحركات.
   const [path, setPath] = useState<readonly (readonly Move[])[]>([]);
   const current = path[path.length - 1] ?? moves;
-  const entries = buildEntries(current, state);
+  const entries = buildEntries(current, state, naming);
 
   const back = () => {
     if (path.length > 0) {

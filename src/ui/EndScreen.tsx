@@ -6,16 +6,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { cardValue } from '../engine/payment';
 import { completeColors } from '../engine/sets';
 import type { GameState } from '../engine/state';
-import { HUMAN_SEAT, seatName } from './describe';
+import { seatName, type Naming } from './describe';
 import { S } from './strings';
 import { SET_COLORS, theme } from './theme';
 
 interface EndScreenProps {
   readonly game: GameState;
+  readonly naming: Naming;
   readonly onPlayAgain: () => void;
 }
 
-export function EndScreen({ game, onPlayAgain }: EndScreenProps) {
+export function EndScreen({ game, naming, onPlayAgain }: EndScreenProps) {
   const winner = game.players.find((player) => player.seat === game.winner);
   const winnerSets = winner ? completeColors(winner.properties) : [];
   const rows = game.players
@@ -30,7 +31,7 @@ export function EndScreen({ game, onPlayAgain }: EndScreenProps) {
     <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.winner}>
         <Text style={styles.label}>{S.winner}</Text>
-        <Text style={styles.winnerName}>{game.winner === HUMAN_SEAT ? S.youWon : seatName(game.winner ?? 0)}</Text>
+        <Text style={styles.winnerName}>{game.winner === naming.mySeat ? S.youWon : seatName(game.winner ?? 0, naming)}</Text>
         <Text style={styles.text}>{S.completed(winnerSets.length)}</Text>
         <View style={styles.swatches}>
           {winnerSets.map((color) => (
@@ -48,7 +49,7 @@ export function EndScreen({ game, onPlayAgain }: EndScreenProps) {
         </View>
         {rows.map((row) => (
           <View key={row.seat} style={[styles.row, row.seat === game.winner && styles.rowWinner]}>
-            <Text style={[styles.text, styles.flex]}>{seatName(row.seat)}</Text>
+            <Text style={[styles.text, styles.flex]}>{seatName(row.seat, naming)}</Text>
             <Text style={[styles.text, styles.column]}>{row.sets}</Text>
             <Text style={[styles.text, styles.column]}>{row.bank}</Text>
           </View>

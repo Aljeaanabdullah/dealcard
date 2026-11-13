@@ -4,7 +4,7 @@ const expoConfig = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*', 'design/*', 'node_modules/*', '.expo/*'],
+    ignores: ['dist/*', 'design/*', 'node_modules/*', '.expo/*', 'supabase/functions/*', 'scripts/*'],
   },
   {
     // CLAUDE.md القسم 6: بدون any وبدون @ts-ignore
