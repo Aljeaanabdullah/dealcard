@@ -59,6 +59,12 @@ export interface GameState {
   readonly turn: TurnState;
   /** دفع معلّق، أو null */
   readonly pending: PendingPayment | null;
+  /** لعبات إضافية بهذا الدور من "زايد لعبه" */
+  readonly extraPlays: number;
+  /** يد مكشوفة بـ"اكشف": تبان للاعب اللي لعب الكرت فقط، لين ينتهي دوره */
+  readonly revealed: { readonly viewer: number; readonly target: number } | null;
+  /** مقاعد اللاعبين اللي دورهم القادم يتفوّت بـ"استريح" */
+  readonly skips: readonly number[];
   /** عدد الأطقم الكاملة المختلفة المطلوبة للفوز */
   readonly winTarget: WinTarget;
   /** مقعد الفائز، أو null إذا اللعبة مستمرة */
@@ -86,6 +92,9 @@ export function createGame(seed: number, winTarget: WinTarget): GameState {
     players,
     turn: { seat: startSeat, hasDrawn: false, playsUsed: 0, discarding: false },
     pending: null,
+    extraPlays: 0,
+    revealed: null,
+    skips: [],
     winTarget,
     winner: null,
     seed: nextSeed(rng),

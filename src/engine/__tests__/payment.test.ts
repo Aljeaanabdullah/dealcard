@@ -243,10 +243,12 @@ describe('كروت الدفع الثابت', () => {
   });
 
   it('كروت الأكشن اللي ما انبنت بعد تنرفض وتبقى باليد', () => {
-    const state = readyState(['action:boog:1']);
-    expect(errorOf(applyMove(state, { type: 'playAction', seat: ME, cardId: 'action:boog:1', targetSeat: 1 }))).toBe(
+    // "بوق لاتخاف" انبنى في المرحلة 4، فالاختبار صار على كرت رد (المرحلة 5).
+    const state = readyState(['action:malekAmal:1']);
+    expect(errorOf(applyMove(state, { type: 'playAction', seat: ME, cardId: 'action:malekAmal:1', targetSeat: 1 }))).toBe(
       'unsupportedAction',
     );
+    expect(player(state, ME).hand).toHaveLength(1);
   });
 });
 
