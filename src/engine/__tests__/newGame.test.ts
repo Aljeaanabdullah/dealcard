@@ -5,7 +5,7 @@ import { allCards, createGame } from '../state';
 
 describe('إنشاء لعبة جديدة', () => {
   it('4 لاعبين، كل واحد بيده 5 كروت', () => {
-    const game = createGame(1);
+    const game = createGame(1, 6);
     expect(game.players).toHaveLength(4);
     for (const player of game.players) {
       expect(player.hand).toHaveLength(5);
@@ -16,14 +16,14 @@ describe('إنشاء لعبة جديدة', () => {
   });
 
   it('الباقي بكومة السحب والنار فاضية', () => {
-    const game = createGame(1);
+    const game = createGame(1, 6);
     expect(game.drawPile).toHaveLength(132 - 4 * 5);
     expect(game.firePile).toHaveLength(0);
   });
 
   it('ما فيه كرت مكرر أو ناقص: 132 كرت فريد', () => {
     for (const seed of [1, 2, 3, 99, 2026]) {
-      const ids = allCards(createGame(seed)).map((card) => card.id);
+      const ids = allCards(createGame(seed, 6)).map((card) => card.id);
       expect(ids).toHaveLength(132);
       expect(ids.slice().sort()).toEqual(buildDeck().map((card) => card.id).sort());
     }
@@ -32,12 +32,12 @@ describe('إنشاء لعبة جديدة', () => {
 
 describe('الخلط المبذور', () => {
   it('نفس البذرة تعطي نفس الخلط', () => {
-    expect(createGame(42)).toEqual(createGame(42));
+    expect(createGame(42, 6)).toEqual(createGame(42, 6));
   });
 
   it('بذرة مختلفة تعطي خلط مختلف', () => {
-    const a = createGame(1).drawPile.map((card) => card.id);
-    const b = createGame(2).drawPile.map((card) => card.id);
+    const a = createGame(1, 6).drawPile.map((card) => card.id);
+    const b = createGame(2, 6).drawPile.map((card) => card.id);
     expect(a).not.toEqual(b);
   });
 

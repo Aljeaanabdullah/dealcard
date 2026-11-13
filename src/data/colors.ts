@@ -27,6 +27,14 @@ export interface ColorDef {
   readonly rent: readonly number[];
 }
 
+export function getColor(id: ColorId): ColorDef {
+  const def = COLORS.find((color) => color.id === id);
+  if (!def) {
+    throw new Error(`لون غير معروف: ${id}`);
+  }
+  return def;
+}
+
 export const COLORS: readonly ColorDef[] = [
   { id: 'brown', name: 'بني', setSize: 2, regions: ['الجهراء', 'الصليبية'], propertyValue: 1, rent: [1, 2] },
   { id: 'lightBlue', name: 'أزرق فاتح', setSize: 3, regions: ['الفحيحيل', 'المنقف', 'أبو حليفة'], propertyValue: 1, rent: [1, 2, 3] },

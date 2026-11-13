@@ -15,11 +15,21 @@ export function createRng(seed: number): Rng {
   };
 }
 
+/** رقم صحيح من 0 إلى max - 1. */
+export function randomInt(rng: Rng, max: number): number {
+  return Math.floor(rng() * max);
+}
+
+/** بذرة جديدة مشتقة من المولّد، تنحفظ بالحالة للاستخدام القادم. */
+export function nextSeed(rng: Rng): number {
+  return randomInt(rng, 4294967296);
+}
+
 /** خلط Fisher–Yates يرجّع مصفوفة جديدة وما يغيّر الأصلية. */
 export function shuffle<T>(items: readonly T[], rng: Rng): T[] {
   const result = items.slice();
   for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
+    const j = randomInt(rng, i + 1);
     const a = result[i] as T;
     const b = result[j] as T;
     result[i] = b;
