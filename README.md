@@ -39,24 +39,28 @@ npm test
 
 ## اللعب أونلاين (Supabase)
 
-اللعب ضد البوتات يشتغل بدون أي إعداد. اللعب أونلاين بغرفة خاصة يحتاج مشروع Supabase:
+اللعب ضد البوتات يشتغل بدون أي إعداد. اللعب أونلاين بغرفة خاصة يشتغل على مشروع Supabase اسمه `deal-q8`.
 
-1. أنشئ مشروع في Supabase بحسابك.
-2. فعّل الدخول كضيف: Authentication > Sign In / Providers > Anonymous sign-ins.
-3. شغّل ملف `supabase/migrations/0001_init.sql` من SQL Editor (أو `supabase db push`).
-4. احزم كود الخادم وانشر الدالة:
+**اللي مجهز:**
+- الجداول والصلاحيات (`supabase/migrations/0001_init.sql`) مطبقة.
+- دالة الخادم `room` منشورة.
+- ملف `.env` المحلي فيه رابط المشروع والمفتاح العام (ما ينرفع للمستودع). على جهاز جديد: انسخ `.env.example` باسم `.env` وعبّه من Project Settings > API.
+
+**خطوة يدوية مرة وحدة:** فعّل الدخول كضيف من لوحة Supabase:
+Authentication > Sign In / Providers > Anonymous sign-ins.
+
+**تجربة الخادم الفعلية** (غرفة، لاعبين ضيوف، مباراة كاملة مع بوتين):
 
 ```bash
-npm run build:server
-supabase functions deploy room
+node --env-file=.env scripts/online-check.mjs
 ```
 
-5. انسخ `.env.example` باسم `.env` وعبّ رابط المشروع والمفتاح العام (anon).
-6. أعد تشغيل `npm start`.
+**إذا تغيّر محرك القوانين** لازم الخادم يتحدث معه:
+1. `npm run build:server` (يولّد `supabase/functions/_shared/game.js`)، ثم commit ورفع.
+2. حدّث رقم الـcommit في رابط الاستيراد داخل `supabase/functions/room/index.ts`.
+3. انشر الدالة: `supabase functions deploy room`.
 
 الخادم هو الحكم: كل حركة تتحقق بنفس محرك القوانين داخل الدالة، وكل لاعب يستلم يده فقط.
-
-**حالة الاختبار:** منطق الغرفة والحكم (`src/net/room.ts`) مختبر بالكامل بدون شبكة. ملفات Supabase نفسها (`supabase/` و `src/net/supabaseTransport.ts`) ما انختبرت على مشروع حقيقي بعد.
 
 ## الأسرار
 

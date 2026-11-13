@@ -1,8 +1,8 @@
 // دالة الخادم (Supabase Edge Function): الخادم هو الحكم.
 // كل حركة توصل هنا، تتحقق بنفس المحرك، ثم تنحفظ وتنبث لكل لاعب بلقطته (يده فقط).
 //
-// تنبيه: هذا الملف ما انختبر، يحتاج مشروع Supabase حقيقي. منطق الغرفة نفسه مختبر في src/net/__tests__.
-// قبل النشر: npm run build:server  (يولّد ../_shared/game.js)
+// حزمة المحرك (supabase/functions/_shared/game.js) تنستورد من المستودع مثبتة على رقم commit،
+// عشان النشر ما يحتاج رفع الحزمة باليد. إذا تغيّر المحرك: npm run build:server، ارفع، وحدّث الرقم هنا ثم انشر.
 // مفتاح service_role يجي من متغيرات بيئة الخادم فقط، وما ينحط داخل التطبيق أبداً.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -18,7 +18,7 @@ import {
   startRoom,
   submitMove,
   tick,
-} from '../_shared/game.js';
+} from 'https://raw.githubusercontent.com/Aljeaanabdullah/dealcard/f575a74015dafbdfc1a9bf9fc649eaf6432d9696/supabase/functions/_shared/game.js';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
