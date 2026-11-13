@@ -416,11 +416,35 @@ describe('استريح', () => {
     expect(state.turn.seat).toBe(1);
   });
 
-  it('ينرفض بدون هدف، على نفسي، أو على لاعب دوره أصلاً متفوّت', () => {
+  it('ينلعب على لاعب دوره أصلاً متفوّت، والتفويت يتراكم: يفوّت دورين', () => {
+    let state = must(play({ ...readyState([card]), skips: [1] }, { cardId: card, targetSeat: 1 }));
+    expect(state.skips).toEqual([1, 1]);
+
+    // الدورة الأولى: المقعد 1 يتفوّت
+    state = must(applyMove(state, { type: 'endTurn', seat: ME }));
+    expect(state.turn.seat).toBe(2);
+    expect(state.skips).toEqual([1]);
+
+    // الدورة الثانية: المقعد 1 يتفوّت مرة ثانية
+    for (const seat of [2, 3, 0]) {
+      state = must(applyMove(state, { type: 'draw', seat }));
+      state = must(applyMove(state, { type: 'endTurn', seat }));
+    }
+    expect(state.turn.seat).toBe(2);
+    expect(state.skips).toEqual([]);
+
+    // الدورة الثالثة: يلعب عادي
+    for (const seat of [2, 3, 0]) {
+      state = must(applyMove(state, { type: 'draw', seat }));
+      state = must(applyMove(state, { type: 'endTurn', seat }));
+    }
+    expect(state.turn.seat).toBe(1);
+  });
+
+  it('ينرفض بدون هدف أو على نفسي', () => {
     const state = readyState([card]);
     expect(errorOf(play(state, { cardId: card }))).toBe('invalidTarget');
     expect(errorOf(play(state, { cardId: card, targetSeat: ME }))).toBe('invalidTarget');
-    expect(errorOf(play({ ...state, skips: [1] }, { cardId: card, targetSeat: 1 }))).toBe('invalidTarget');
   });
 });
 

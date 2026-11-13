@@ -522,7 +522,8 @@ function playAction(state: GameState, move: PlayActionMove): MoveResult {
     case 'extraPlay':
       return done({ ...base, extraPlays: base.extraPlays + 1 });
     case 'estareeh': {
-      if (!isOtherSeat(seat, targetSeat) || base.skips.includes(targetSeat)) return fail('invalidTarget');
+      if (!isOtherSeat(seat, targetSeat)) return fail('invalidTarget');
+      // التفويت يتراكم: إذا انلعب مرتين على نفس اللاعب يفوّت دورين.
       return done({ ...base, skips: [...base.skips, targetSeat] });
     }
     case 'ekshef': {
@@ -651,8 +652,9 @@ function endTurn(state: GameState, seat: number): MoveResult {
   let nextSeat = (seat + 1) % PLAYER_COUNT;
   let skips = state.skips;
   for (let i = 0; i < PLAYER_COUNT && skips.includes(nextSeat); i++) {
-    const skipped = nextSeat;
-    skips = skips.filter((s) => s !== skipped);
+    // ينشال تفويت واحد فقط: إذا عليه أكثر من واحد يبقى الباقي لدوره اللي بعده.
+    const index = skips.indexOf(nextSeat);
+    skips = skips.filter((_, i) => i !== index);
     nextSeat = (nextSeat + 1) % PLAYER_COUNT;
   }
 
@@ -732,14 +734,12 @@ function actionMoves(state: GameState, player: PlayerState, card: Card & { kind:
     case 'ekshef':
       for (const targetSeat of others) moves.push({ ...base, targetSeat });
       break;
+    case 'estareeh':
+      for (const targetSeat of others) moves.push({ ...base, targetSeat });
+      break;
     case 'tathmeen':
       if (completeColors(player.properties).length > 0) {
         for (const targetSeat of others) moves.push({ ...base, targetSeat });
-      }
-      break;
-    case 'estareeh':
-      for (const targetSeat of others) {
-        if (!state.skips.includes(targetSeat)) moves.push({ ...base, targetSeat });
       }
       break;
     case 'boog':

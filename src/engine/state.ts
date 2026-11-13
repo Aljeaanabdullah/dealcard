@@ -63,7 +63,7 @@ export interface GameState {
   readonly extraPlays: number;
   /** يد مكشوفة بـ"اكشف": تبان للاعب اللي لعب الكرت فقط، لين ينتهي دوره */
   readonly revealed: { readonly viewer: number; readonly target: number } | null;
-  /** مقاعد اللاعبين اللي دورهم القادم يتفوّت بـ"استريح" */
+  /** مقاعد اللاعبين اللي دورهم القادم يتفوّت بـ"استريح". المقعد يتكرر إذا عليه أكثر من تفويت. */
   readonly skips: readonly number[];
   /** عدد الأطقم الكاملة المختلفة المطلوبة للفوز */
   readonly winTarget: WinTarget;
