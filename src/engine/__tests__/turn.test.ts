@@ -386,7 +386,10 @@ describe('مباراة كاملة', () => {
         const rest = moves.filter((m) => m.type === 'draw' || m.type === 'endTurn' || m.type === 'discard');
         options = useful.length > 0 ? useful : junk.length > 0 ? junk : rest;
       } else {
-        options = moves.filter((m) => m.type !== 'playProperty' && m.type !== 'playJoker' && m.type !== 'moveJoker');
+        // الباقين يسحبون ويحطون فلوس ويرمون فقط (بدون عقارات ولا أكشن).
+        options = moves.filter(
+          (m) => m.type === 'draw' || m.type === 'bankMoney' || m.type === 'discard' || m.type === 'endTurn',
+        );
       }
 
       expect(options.length).toBeGreaterThan(0);

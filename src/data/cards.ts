@@ -12,13 +12,15 @@ export interface ActionDef {
   readonly name: string;
   readonly count: number;
   readonly group: ActionGroup;
+  /** مبلغ الدفع الثابت بالدينار (لكروت الدفع فقط) */
+  readonly amount?: number;
 }
 
 export const ACTIONS = [
   // أ) كروت الدفع
-  { id: 'qarqash', name: 'قرقش', count: 3, group: 'payment' },
-  { id: 'qardIskan', name: 'قرض اسكان', count: 1, group: 'payment' },
-  { id: 'eyadi', name: 'العيادي', count: 3, group: 'payment' },
+  { id: 'qarqash', name: 'قرقش', count: 3, group: 'payment', amount: 5 },
+  { id: 'qardIskan', name: 'قرض اسكان', count: 1, group: 'payment', amount: 7 },
+  { id: 'eyadi', name: 'العيادي', count: 3, group: 'payment', amount: 2 },
   { id: 'tathmeen', name: 'تثمين', count: 1, group: 'payment' },
   { id: 'doubleRent', name: 'دوبل ايجار', count: 2, group: 'payment' },
   // ب) كروت السرقة والتبديل
@@ -99,14 +101,16 @@ export interface BuildingDef {
   readonly name: string;
   /** زيادة الإيجار */
   readonly rentBonus: number;
+  /** قيمة المبنى بالدينار إذا اندفع فيه (= زيادة الإيجار) */
+  readonly value: number;
   readonly count: number;
 }
 
 export const BUILDINGS = [
-  { id: 'resort', name: 'منتجع', rentBonus: 5, count: 1 },
-  { id: 'chalet', name: 'شاليه', rentBonus: 4, count: 2 },
-  { id: 'plot', name: 'قسيمه', rentBonus: 3, count: 3 },
-  { id: 'apartments', name: 'عماره', rentBonus: 4, count: 4 },
+  { id: 'resort', name: 'منتجع', rentBonus: 5, value: 5, count: 1 },
+  { id: 'chalet', name: 'شاليه', rentBonus: 4, value: 4, count: 2 },
+  { id: 'plot', name: 'قسيمه', rentBonus: 3, value: 3, count: 3 },
+  { id: 'apartments', name: 'عماره', rentBonus: 4, value: 4, count: 4 },
 ] as const satisfies readonly BuildingDef[];
 
 export type BuildingId = (typeof BUILDINGS)[number]['id'];

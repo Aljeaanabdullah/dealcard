@@ -2,12 +2,14 @@
 
 import type { Card } from '../data/cards';
 import { getColor, type ColorId } from '../data/colors';
+import type { WinTarget } from '../data/rules';
 import type { MoveResult } from '../engine/moves';
-import { allCards, type GameState, type TurnState } from '../engine/state';
+import { allCards, createGame, type GameState, type TurnState } from '../engine/state';
 
 export type Target =
   | { readonly zone: 'hand' | 'bank'; readonly seat: number }
   | { readonly zone: 'properties'; readonly seat: number; readonly color: ColorId }
+  | { readonly zone: 'buildings'; readonly seat: number; readonly color: ColorId | null }
   | { readonly zone: 'draw' | 'fire' };
 
 /** ينقل كرت من مكانه الحالي (أينما كان) إلى المكان المطلوب. */
@@ -25,7 +27,7 @@ export function place(state: GameState, cardId: string, to: Target): GameState {
     hand: without(p.hand),
     bank: without(p.bank),
     properties: p.properties.filter((placed) => placed.card.id !== cardId),
-    buildings: without(p.buildings),
+    buildings: p.buildings.filter((placed) => placed.card.id !== cardId),
   }));
 
   const seatPlayer = (seat: number) => {
@@ -57,6 +59,11 @@ export function place(state: GameState, cardId: string, to: Target): GameState {
     case 'properties': {
       const { index, player } = seatPlayer(to.seat);
       players[index] = { ...player, properties: [...player.properties, { card, color: to.color }] };
+      break;
+    }
+    case 'buildings': {
+      const { index, player } = seatPlayer(to.seat);
+      players[index] = { ...player, buildings: [...player.buildings, { card, color: to.color }] };
       break;
     }
   }
@@ -94,6 +101,19 @@ export function giveFullSet(state: GameState, seat: number, color: ColorId): Gam
 
 export function setTurn(state: GameState, patch: Partial<TurnState>): GameState {
   return { ...state, turn: { ...state.turn, ...patch } };
+}
+
+/**
+ * لعبة جاهزة للاختبار: الدور عند المقعد 0 وهو ساحب، ويده فيها الكروت المطلوبة فقط،
+ * وبقية اللاعبين أيديهم فاضية (كل شي ثاني بكومة السحب).
+ */
+export function readyState(handIds: readonly string[], winTarget: WinTarget = 6): GameState {
+  let state = createGame(1, winTarget);
+  for (const player of state.players) {
+    state = emptyHand(state, player.seat);
+  }
+  state = placeAll(state, handIds, { zone: 'hand', seat: 0 });
+  return setTurn(state, { seat: 0, hasDrawn: true, playsUsed: 0, discarding: false });
 }
 
 /** يرجّع الحالة الجديدة، أو يرمي خطأ إذا الحركة انرفضت. */
