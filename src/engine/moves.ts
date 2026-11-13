@@ -132,11 +132,13 @@ function checkCanPlay(state: GameState): MoveError | null {
 // ===================== نوافذ الرد =====================
 
 /** كروت الرد المسموحة للاعب بنافذة معيّنة حسب دوره فيها. */
-function allowedResponses(window: ResponseWindow, seat: number): ResponseKind[] {
+function allowedResponses(state: GameState, window: ResponseWindow, seat: number): ResponseKind[] {
   const { effect } = window;
   if (seat === effect.actor) return [];
   if (seat === effect.target) {
-    return effect.isRent ? ['malekAmal', 'hayyour', 'maTshoofShar', 'edfaaliEjari'] : ['malekAmal', 'hayyour'];
+    const kinds: ResponseKind[] = effect.isRent ? ['malekAmal', 'hayyour', 'maTshoofShar', 'edfaaliEjari'] : ['malekAmal', 'hayyour'];
+    // "حيور" يعتبر أكشن على صاحب الأكشن: ما ينلعب إذا هو محمي بـ"حصانه".
+    return state.immune.includes(effect.actor) ? kinds.filter((k) => k !== 'hayyour') : kinds;
   }
   // لاعب ثالث: يفزع للمستهدف.
   return ['fazaah'];
@@ -155,7 +157,7 @@ function defenders(state: GameState, window: ResponseWindow): number[] {
   return state.players
     .map((p) => p.seat)
     .filter(
-      (seat) => !window.passed.includes(seat) && holdsResponse(getPlayer(state, seat), allowedResponses(window, seat)),
+      (seat) => !window.passed.includes(seat) && holdsResponse(getPlayer(state, seat), allowedResponses(state, window, seat)),
     );
 }
 
@@ -233,7 +235,7 @@ function respond(state: GameState, move: RespondMove): MoveResult {
   const seat = move.seat;
 
   const allowed: ResponseKind[] =
-    window.awaiting === 'actor' ? (seat === effect.actor ? ['malekAmal'] : []) : allowedResponses(window, seat);
+    window.awaiting === 'actor' ? (seat === effect.actor ? ['malekAmal'] : []) : allowedResponses(state, window, seat);
   const isMyTurnToRespond =
     window.awaiting === 'actor' ? seat === effect.actor : defenders(state, window).includes(seat);
   if (!isMyTurnToRespond) return fail('notYourResponse');
@@ -802,7 +804,7 @@ function responseMoves(state: GameState, window: ResponseWindow): Move[] {
   const seats = window.awaiting === 'actor' ? [effect.actor] : defenders(state, window);
   for (const seat of seats) {
     moves.push({ type: 'respond', seat });
-    const allowed: ResponseKind[] = window.awaiting === 'actor' ? ['malekAmal'] : allowedResponses(window, seat);
+    const allowed: ResponseKind[] = window.awaiting === 'actor' ? ['malekAmal'] : allowedResponses(state, window, seat);
 
     for (const card of getPlayer(state, seat).hand) {
       if (card.kind !== 'action') continue;

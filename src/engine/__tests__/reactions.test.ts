@@ -370,6 +370,27 @@ describe('حصانه', () => {
     expect(state.immune).toEqual([]);
   });
 
+  it('حيور ما ينلعب على صاحب حصانه: يعتبر أكشن على لاعب محمي', () => {
+    function attack(seat1Hand: readonly string[]): GameState {
+      let state = readyState(['action:hasanah:1', 'action:qarqash:1']);
+      state = place(state, 'money:5:1', { zone: 'bank', seat: 1 });
+      state = placeAll(state, seat1Hand, { zone: 'hand', seat: 1 });
+      state = must(applyMove(state, { type: 'playAction', seat: ME, cardId: 'action:hasanah:1' }));
+      return must(applyMove(state, { type: 'playAction', seat: ME, cardId: 'action:qarqash:1', targetSeat: 1 }));
+    }
+
+    // بيده حيور بس: ما تنفتح له نافذة والأكشن يتنفذ
+    const onlyHayyour = attack(['action:hayyour:1']);
+    expect(onlyHayyour.response).toBeNull();
+    expect(onlyHayyour.pending).toEqual({ to: ME, debts: [{ from: 1, amount: 5 }] });
+
+    // بيده حيور ومالك امل: حيور ينرفض ومالك امل ينقبل
+    let both = attack(['action:hayyour:1', 'action:malekAmal:1']);
+    expect(errorOf(applyMove(both, { type: 'respond', seat: 1, cardId: 'action:hayyour:1' }))).toBe('invalidResponse');
+    both = must(applyMove(both, { type: 'respond', seat: 1, cardId: 'action:malekAmal:1' }));
+    expect(both.pending).toBeNull();
+  });
+
   it('تنحسب من الـ3 كروت', () => {
     const state = { ...readyState(['action:hasanah:1']) };
     const full = { ...state, turn: { ...state.turn, playsUsed: 3 } };
