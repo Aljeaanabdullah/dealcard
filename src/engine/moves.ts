@@ -839,6 +839,11 @@ function responseMoves(state: GameState, window: ResponseWindow): Move[] {
   return moves;
 }
 
+/** مقاعد اللاعبين اللي عليهم يتحركون الحين (صاحب الدور، أو اللي عليهم رد أو دفع). */
+export function seatsToAct(state: GameState): number[] {
+  return [...new Set(legalMoves(state).map((move) => move.seat))];
+}
+
 /**
  * الحركات القانونية بالحالة الحالية.
  * نافذة رد مفتوحة: حركات الرد. دفع معلّق: حركة دفع جاهزة لكل مديون. غير كذا: حركات صاحب الدور.
