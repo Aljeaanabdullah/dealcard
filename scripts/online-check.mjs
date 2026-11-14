@@ -61,6 +61,7 @@ const BOT_NAMES = ['bo hany', 'Thyab', 'Bo3zozQ8', 'Bo3thab', 'Miry', 'komar'];
 const botSeats = started.snapshot.seats.filter((s) => s.isBot);
 check(botSeats.every((s) => BOT_NAMES.includes(s.name) && s.avatar >= 0 && s.avatar < 12), `البوتات بأسماء من القائمة وشخصيات عشوائية: ${botSeats.map((s) => `${s.name} (${s.avatar})`).join('، ')}`);
 check(new Set(started.snapshot.seats.map((s) => s.avatar)).size >= 3, 'شخصيات البوتات مختلفة عن بعض');
+check(botSeats.every((s) => [4, 5, 8].includes(s.avatar) === (s.name === 'Miry')), 'صورة كل بوت تطابق اسمه (Miry بنت والباقي أولاد)');
 check(botSeats[0].name !== botSeats[1].name, 'أسماء البوتات مختلفة');
 
 // إخفاء الأيدي

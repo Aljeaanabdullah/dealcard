@@ -1,7 +1,7 @@
 // اختيار أسماء البوتات وشخصياتهم عشوائياً (عشوائية مبذورة) — prd.md القسم 9
 
-import { AVATAR_COUNT } from '../data/avatars';
-import { BOT_NAMES } from '../data/bots';
+import { AVATAR_COUNT, GIRL_AVATARS } from '../data/avatars';
+import { BOT_NAMES, botGender } from '../data/bots';
 import { randomInt, type Rng } from '../engine/rng';
 
 /**
@@ -20,16 +20,20 @@ export function pickBotNames(rng: Rng, count: number, taken: readonly string[] =
 }
 
 /**
- * يختار شخصيات مختلفة للبوتات من شخصيات اللاعبين، غير المستخدمة بالغرفة قدر الإمكان.
- * البوت ياخذ شخصية عشوائية مثل أي لاعب (والإيموجي يم اسمه يبيّن إنه كمبيوتر).
+ * يختار شخصية لكل بوت حسب اسمه: اسم البنت ياخذ شخصية بنت، واسم الولد شخصية ولد.
+ * الشخصية عشوائية من اللي تناسبه، وغير المستخدمة بالغرفة قدر الإمكان
+ * (والإيموجي يم اسمه يبيّن إنه كمبيوتر).
  */
-export function pickBotAvatars(rng: Rng, count: number, taken: readonly number[] = []): number[] {
+export function pickBotAvatars(rng: Rng, names: readonly string[], taken: readonly number[] = []): number[] {
   const all = Array.from({ length: AVATAR_COUNT }, (_, index) => index);
-  let pool = all.filter((avatar) => !taken.includes(avatar));
   const picked: number[] = [];
-  while (picked.length < count) {
-    if (pool.length === 0) pool = all.slice();
-    const [avatar] = pool.splice(randomInt(rng, pool.length), 1);
+  for (const name of names) {
+    const gender = botGender(name);
+    const fitting = gender === null ? all : all.filter((avatar) => GIRL_AVATARS.includes(avatar) === (gender === 'girl'));
+    const free = fitting.filter((avatar) => !taken.includes(avatar) && !picked.includes(avatar));
+    // إذا كل اللي تناسبه مأخوذة، ياخذ وحدة تناسبه حتى لو مكررة.
+    const pool = free.length > 0 ? free : fitting;
+    const avatar = pool[randomInt(rng, pool.length)];
     if (avatar !== undefined) picked.push(avatar);
   }
   return picked;

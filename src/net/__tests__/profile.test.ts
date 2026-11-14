@@ -1,7 +1,7 @@
 // اختبارات أسماء البوتات، شخصيات اللاعبين، والحساب الاختياري — prd.md الأقسام 6 و 9
 import { pickBotAvatars, pickBotNames } from '../../bot/names';
-import { AVATAR_COUNT, BOT_AVATAR, DEFAULT_AVATAR, normalizeAvatar } from '../../data/avatars';
-import { BOT_NAMES } from '../../data/bots';
+import { AVATAR_COUNT, BOT_AVATAR, DEFAULT_AVATAR, GIRL_AVATARS, normalizeAvatar } from '../../data/avatars';
+import { BOT_NAMES, BOTS } from '../../data/bots';
 import { createRng } from '../../engine/rng';
 import { checkCredentials, cleanEmail, readProfile } from '../account';
 import { createMemoryAccount } from '../memoryAccount';
@@ -57,14 +57,62 @@ describe('أسماء البوتات', () => {
   });
 
   it('شخصيات البوتات عشوائية مبذورة: مختلفة عن بعض، وتتغير من مباراة لمباراة', () => {
-    const avatars = pickBotAvatars(createRng(4), 3, [2]);
+    const boys = ['bo hany', 'Thyab', 'komar'];
+    const avatars = pickBotAvatars(createRng(4), boys, [2]);
     expect(new Set(avatars).size).toBe(3);
     expect(avatars).not.toContain(2);
     for (const avatar of avatars) expect(normalizeAvatar(avatar)).toBe(avatar);
-    expect(pickBotAvatars(createRng(4), 3, [2])).toEqual(avatars);
+    expect(pickBotAvatars(createRng(4), boys, [2])).toEqual(avatars);
     const seen = new Set<string>();
-    for (let seed = 1; seed <= 30; seed++) seen.add(pickBotAvatars(createRng(seed), 3).join());
+    for (let seed = 1; seed <= 30; seed++) seen.add(pickBotAvatars(createRng(seed), boys).join());
     expect(seen.size).toBeGreaterThan(5);
+  });
+
+  it('ولد أو بنت مثل ما حددهم صاحب المشروع: Miry بنت والباقي أولاد', () => {
+    expect(BOTS.map((bot) => `${bot.name}:${bot.gender}`)).toEqual([
+      'bo hany:boy',
+      'Thyab:boy',
+      'Bo3zozQ8:boy',
+      'Bo3thab:boy',
+      'Miry:girl',
+      'komar:boy',
+    ]);
+    expect(GIRL_AVATARS).toEqual([4, 5, 8]);
+  });
+
+  it('صورة البوت تطابق اسمه: Miry دايماً صورة بنت، والأولاد دايماً صورة ولد', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const avatars = pickBotAvatars(createRng(seed), BOT_NAMES);
+      expect(new Set(avatars).size).toBe(BOT_NAMES.length);
+      BOT_NAMES.forEach((name, index) => {
+        expect(GIRL_AVATARS.includes(avatars[index] ?? -1)).toBe(name === 'Miry');
+      });
+    }
+  });
+
+  it('إذا اللاعبين ماخذين كل صور البنات: Miry تاخذ صورة بنت مكررة، مو صورة ولد', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const [avatar] = pickBotAvatars(createRng(seed), ['Miry'], GIRL_AVATARS);
+      expect(GIRL_AVATARS).toContain(avatar);
+    }
+  });
+
+  it('بالغرفة وبمكان اللاعب اللي طلع: صورة البوت تطابق اسمه', () => {
+    const matches = (seat: { name: string; avatar?: number }) => GIRL_AVATARS.includes(seat.avatar ?? -1) === (seat.name === 'Miry');
+    let miry = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      let room = ok(createRoom('ABCDE', 'p0', 'سالم', 4));
+      room = ok(joinRoom(room, 'p1', 'خالد', 5));
+      room = ok(startRoom(room, 'p0', seed, 1000));
+      room = ok(leaveRoom(room, 'p1'));
+      const bots = room.seats.filter((seat) => seat.isBot);
+      expect(bots).toHaveLength(3);
+      for (const bot of bots) {
+        expect(matches(bot)).toBe(true);
+        if (bot.name === 'Miry') miry += 1;
+      }
+    }
+    expect(miry).toBeGreaterThan(0);
   });
 
   it('لاعب طلع وسط اللعب: البوت اللي يستلم مكانه ياخذ اسم بوت مو مستخدم', () => {

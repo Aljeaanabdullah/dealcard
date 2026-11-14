@@ -47,7 +47,7 @@ export function seatAvatar(seat: number, naming: Naming): number {
 export function localNaming(seed: number, avatar: number): Naming {
   const rng = createRng(seed + 1);
   const botNames = pickBotNames(rng, PLAYER_COUNT - 1);
-  const botAvatars = pickBotAvatars(rng, botNames.length, [avatar]);
+  const botAvatars = pickBotAvatars(rng, botNames, [avatar]);
   return {
     mySeat: HUMAN_SEAT,
     names: ['', ...botNames],

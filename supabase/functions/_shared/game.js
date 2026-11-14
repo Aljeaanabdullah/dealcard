@@ -1414,12 +1414,24 @@ function chooseMove(state, seat, rng) {
 // src/data/avatars.ts
 var AVATAR_COUNT = 12;
 var DEFAULT_AVATAR = 0;
+var GIRL_AVATARS = [4, 5, 8];
 function normalizeAvatar(value) {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < AVATAR_COUNT ? value : DEFAULT_AVATAR;
 }
 
 // src/data/bots.ts
-var BOT_NAMES = ["bo hany", "Thyab", "Bo3zozQ8", "Bo3thab", "Miry", "komar"];
+var BOTS = [
+  { name: "bo hany", gender: "boy" },
+  { name: "Thyab", gender: "boy" },
+  { name: "Bo3zozQ8", gender: "boy" },
+  { name: "Bo3thab", gender: "boy" },
+  { name: "Miry", gender: "girl" },
+  { name: "komar", gender: "boy" }
+];
+var BOT_NAMES = BOTS.map((bot) => bot.name);
+function botGender(name) {
+  return BOTS.find((bot) => bot.name === name)?.gender ?? null;
+}
 
 // src/bot/names.ts
 function pickBotNames(rng, count, taken = []) {
@@ -1432,13 +1444,15 @@ function pickBotNames(rng, count, taken = []) {
   }
   return picked;
 }
-function pickBotAvatars(rng, count, taken = []) {
+function pickBotAvatars(rng, names, taken = []) {
   const all = Array.from({ length: AVATAR_COUNT }, (_, index) => index);
-  let pool = all.filter((avatar) => !taken.includes(avatar));
   const picked = [];
-  while (picked.length < count) {
-    if (pool.length === 0) pool = all.slice();
-    const [avatar] = pool.splice(randomInt(rng, pool.length), 1);
+  for (const name of names) {
+    const gender = botGender(name);
+    const fitting = gender === null ? all : all.filter((avatar2) => GIRL_AVATARS.includes(avatar2) === (gender === "girl"));
+    const free = fitting.filter((avatar2) => !taken.includes(avatar2) && !picked.includes(avatar2));
+    const pool = free.length > 0 ? free : fitting;
+    const avatar = pool[randomInt(rng, pool.length)];
     if (avatar !== void 0) picked.push(avatar);
   }
   return picked;
@@ -1615,7 +1629,7 @@ function begin(room, seed, now) {
   );
   const botAvatars = pickBotAvatars(
     identityRng,
-    botNames.length,
+    botNames,
     seats.map((seat) => normalizeAvatar(seat.avatar))
   );
   botNames.forEach((name, index) => {
@@ -1678,7 +1692,7 @@ function leaveRoom(room, playerId) {
   );
   const [botAvatar] = pickBotAvatars(
     identityRng,
-    1,
+    botName === void 0 ? [] : [botName],
     room.seats.map((s) => normalizeAvatar(s.avatar))
   );
   return {

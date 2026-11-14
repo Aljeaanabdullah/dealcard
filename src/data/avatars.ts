@@ -7,6 +7,9 @@ export const AVATAR_COUNT = 12;
 /** الشخصية الافتراضية إذا اللاعب ما اختار. */
 export const DEFAULT_AVATAR = 0;
 
+/** شخصيات البنات من الـ12 (الباقي أولاد). تُستخدم عشان صورة البوت تطابق اسمه. */
+export const GIRL_AVATARS: readonly number[] = [4, 5, 8];
+
 /** وجه روبوت احتياطي للمقعد اللي ما له شخصية معروفة. البوتات باللعب ياخذون شخصية عشوائية من الـ12. */
 export const BOT_AVATAR = -1;
 

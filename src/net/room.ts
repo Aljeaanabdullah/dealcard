@@ -210,7 +210,7 @@ function begin(room: Room, seed: number, now: number): RoomResult {
   );
   const botAvatars = pickBotAvatars(
     identityRng,
-    botNames.length,
+    botNames,
     seats.map((seat) => normalizeAvatar(seat.avatar)),
   );
   botNames.forEach((name, index) => {
@@ -285,7 +285,7 @@ export function leaveRoom(room: Room, playerId: string): RoomResult {
   );
   const [botAvatar] = pickBotAvatars(
     identityRng,
-    1,
+    botName === undefined ? [] : [botName],
     room.seats.map((s) => normalizeAvatar(s.avatar)),
   );
   return {
