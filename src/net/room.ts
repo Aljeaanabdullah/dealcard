@@ -3,8 +3,8 @@
 // الوقت يدخل كرقم (now) من الخادم؛ هذا الملف ما يقرأ وقت النظام.
 
 import { chooseMove } from '../bot/bot';
-import { pickBotNames } from '../bot/names';
-import { BOT_AVATAR, DEFAULT_AVATAR, normalizeAvatar } from '../data/avatars';
+import { pickBotAvatars, pickBotNames } from '../bot/names';
+import { DEFAULT_AVATAR, normalizeAvatar } from '../data/avatars';
 import {
   MATCH_WAIT_SECONDS,
   PLAYER_COUNT,
@@ -27,7 +27,7 @@ export interface Seat {
   readonly playerId: string | null;
   /** الاسم المستعار. البوت ياخذ اسم عشوائي من قائمة أسماء البوتات. */
   readonly name: string;
-  /** رقم الشخصية اللي اختارها اللاعب، أو BOT_AVATAR للبوت */
+  /** رقم الشخصية اللي اختارها اللاعب. البوت ياخذ شخصية عشوائية. */
   readonly avatar?: number;
   readonly isBot: boolean;
   readonly connected: boolean;
@@ -200,16 +200,22 @@ export function startRoom(room: Room, playerId: string, seed: number, now: numbe
 function begin(room: Room, seed: number, now: number): RoomResult {
   if (room.status !== 'lobby') return fail('alreadyStarted');
 
-  // البوتات تكمل العدد بأسماء عشوائية من القائمة (بذرة مستقلة عن بذرة لعب البوتات).
+  // البوتات تكمل العدد بأسماء وشخصيات عشوائية (بذرة مستقلة عن بذرة لعب البوتات).
   const seats: Seat[] = [...room.seats];
+  const identityRng = createRng(seed + 1);
   const botNames = pickBotNames(
-    createRng(seed + 1),
+    identityRng,
     PLAYER_COUNT - seats.length,
     seats.map((seat) => seat.name),
   );
-  for (const name of botNames) {
-    seats.push({ playerId: null, name, avatar: BOT_AVATAR, isBot: true, connected: true });
-  }
+  const botAvatars = pickBotAvatars(
+    identityRng,
+    botNames.length,
+    seats.map((seat) => normalizeAvatar(seat.avatar)),
+  );
+  botNames.forEach((name, index) => {
+    seats.push({ playerId: null, name, avatar: botAvatars[index] ?? DEFAULT_AVATAR, isBot: true, connected: true });
+  });
   const rng = createRng(seed);
   const game = createGame(seed, room.winTarget);
   return {
@@ -270,11 +276,17 @@ export function leaveRoom(room: Room, playerId: string): RoomResult {
     const nextHost = seats[0]?.playerId ?? room.hostId;
     return { ok: true, room: { ...room, seats, hostId: playerId === room.hostId ? nextHost : room.hostId } };
   }
-  // البوت اللي يستلم المكان ياخذ اسم بوت مو مستخدم بالغرفة.
+  // البوت اللي يستلم المكان ياخذ اسم بوت وشخصية مو مستخدمين بالغرفة.
+  const identityRng = createRng(room.botSeed + seat + 1);
   const [botName] = pickBotNames(
-    createRng(room.botSeed + seat + 1),
+    identityRng,
     1,
     room.seats.map((s) => s.name),
+  );
+  const [botAvatar] = pickBotAvatars(
+    identityRng,
+    1,
+    room.seats.map((s) => normalizeAvatar(s.avatar)),
   );
   return {
     ok: true,
@@ -282,7 +294,7 @@ export function leaveRoom(room: Room, playerId: string): RoomResult {
       ...room,
       seats: room.seats.map((s, index) =>
         index === seat
-          ? { ...s, playerId: null, name: botName ?? s.name, avatar: BOT_AVATAR, isBot: true, connected: false }
+          ? { ...s, playerId: null, name: botName ?? s.name, avatar: botAvatar ?? DEFAULT_AVATAR, isBot: true, connected: false }
           : s,
       ),
     },
@@ -383,7 +395,7 @@ export function snapshotFor(room: Room, playerId: string): RoomSnapshot | null {
     isHost: playerId === room.hostId,
     seats: room.seats.map((seat) => ({
       name: seat.name,
-      avatar: seat.isBot ? BOT_AVATAR : normalizeAvatar(seat.avatar),
+      avatar: normalizeAvatar(seat.avatar),
       isBot: seat.isBot,
       connected: seat.connected,
     })),

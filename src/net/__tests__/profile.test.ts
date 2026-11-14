@@ -1,5 +1,5 @@
 // اختبارات أسماء البوتات، شخصيات اللاعبين، والحساب الاختياري — prd.md الأقسام 6 و 9
-import { pickBotNames } from '../../bot/names';
+import { pickBotAvatars, pickBotNames } from '../../bot/names';
 import { AVATAR_COUNT, BOT_AVATAR, DEFAULT_AVATAR, normalizeAvatar } from '../../data/avatars';
 import { BOT_NAMES } from '../../data/bots';
 import { createRng } from '../../engine/rng';
@@ -38,19 +38,33 @@ describe('أسماء البوتات', () => {
     }
   });
 
-  it('بالغرفة: البوتات اللي تكمل العدد ياخذون أسماء من القائمة وشخصية الروبوت', () => {
+  it('بالغرفة: البوتات اللي تكمل العدد ياخذون أسماء من القائمة وشخصيات عشوائية مختلفة (مو وجه الروبوت)', () => {
     const room = ok(startRoom(ok(createRoom('ABCDE', 'p0', 'سالم', 3)), 'p0', 11, 1000));
     const bots = room.seats.filter((seat) => seat.isBot);
     expect(bots).toHaveLength(3);
     expect(new Set(bots.map((seat) => seat.name)).size).toBe(3);
     for (const bot of bots) {
       expect(BOT_NAMES).toContain(bot.name);
-      expect(bot.avatar).toBe(BOT_AVATAR);
+      expect(bot.avatar).not.toBe(BOT_AVATAR);
+      expect(normalizeAvatar(bot.avatar)).toBe(bot.avatar);
     }
+    // كل مقعد له شخصية مختلفة، وشخصية اللاعب ما ياخذها بوت
+    expect(new Set(room.seats.map((seat) => seat.avatar)).size).toBe(4);
     // لقطة اللاعب فيها أسماء البوتات وشخصياتهم
     const snapshot = snapshotFor(room, 'p0');
-    expect(snapshot?.seats.map((seat) => seat.avatar)).toEqual([3, BOT_AVATAR, BOT_AVATAR, BOT_AVATAR]);
+    expect(snapshot?.seats.map((seat) => seat.avatar)).toEqual(room.seats.map((seat) => seat.avatar));
     expect(snapshot?.seats.slice(1).every((seat) => seat.isBot && BOT_NAMES.includes(seat.name))).toBe(true);
+  });
+
+  it('شخصيات البوتات عشوائية مبذورة: مختلفة عن بعض، وتتغير من مباراة لمباراة', () => {
+    const avatars = pickBotAvatars(createRng(4), 3, [2]);
+    expect(new Set(avatars).size).toBe(3);
+    expect(avatars).not.toContain(2);
+    for (const avatar of avatars) expect(normalizeAvatar(avatar)).toBe(avatar);
+    expect(pickBotAvatars(createRng(4), 3, [2])).toEqual(avatars);
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 30; seed++) seen.add(pickBotAvatars(createRng(seed), 3).join());
+    expect(seen.size).toBeGreaterThan(5);
   });
 
   it('لاعب طلع وسط اللعب: البوت اللي يستلم مكانه ياخذ اسم بوت مو مستخدم', () => {
@@ -61,7 +75,7 @@ describe('أسماء البوتات', () => {
     room = ok(leaveRoom(room, 'p1'));
     const taken = room.seats[1];
     expect(taken?.isBot).toBe(true);
-    expect(taken?.avatar).toBe(BOT_AVATAR);
+    expect(taken?.avatar).not.toBe(BOT_AVATAR);
     expect(BOT_NAMES).toContain(taken?.name);
     expect(before).not.toContain(taken?.name);
     expect(new Set(room.seats.map((seat) => seat.name)).size).toBe(4);

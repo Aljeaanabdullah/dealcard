@@ -1,6 +1,6 @@
 // معلومات عرض الكروت، ووصف الحركات والتأثيرات كنص للاعب.
 
-import { pickBotNames } from '../bot/names';
+import { pickBotAvatars, pickBotNames } from '../bot/names';
 import { BOT_AVATAR, DEFAULT_AVATAR } from '../data/avatars';
 import { PLAYER_COUNT } from '../data/rules';
 import { createRng } from '../engine/rng';
@@ -43,14 +43,16 @@ export function seatAvatar(seat: number, naming: Naming): number {
   return seat === naming.mySeat ? DEFAULT_AVATAR : BOT_AVATAR;
 }
 
-/** التسمية بمباراة محلية: أنا بالمقعد 0، والبوتات الثلاثة ياخذون أسماء عشوائية من القائمة (مبذورة). */
+/** التسمية بمباراة محلية: أنا بالمقعد 0، والبوتات الثلاثة ياخذون أسماء وشخصيات عشوائية (مبذورة). */
 export function localNaming(seed: number, avatar: number): Naming {
-  const botNames = pickBotNames(createRng(seed + 1), PLAYER_COUNT - 1);
+  const rng = createRng(seed + 1);
+  const botNames = pickBotNames(rng, PLAYER_COUNT - 1);
+  const botAvatars = pickBotAvatars(rng, botNames.length, [avatar]);
   return {
     mySeat: HUMAN_SEAT,
     names: ['', ...botNames],
     bots: [false, ...botNames.map(() => true)],
-    avatars: [avatar, ...botNames.map(() => BOT_AVATAR)],
+    avatars: [avatar, ...botAvatars],
   };
 }
 

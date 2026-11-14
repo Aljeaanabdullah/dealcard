@@ -6,7 +6,7 @@ export const S = {
   tagline: 'لعبة كروت خليجية لأربعة لاعبين',
 
   // شاشة البداية
-  playVsBots: 'لعب ضد البوتات',
+  playVsBots: 'لعب تدريب',
   winCondition: 'شرط الفوز',
   sets: (n: number) => `${n} أطقم مختلفة`,
   start: 'ابدأ اللعب',
@@ -241,6 +241,15 @@ export const S = {
   avatarLabel: (n: number) => `شخصية ${n}`,
   // الحساب (اختياري)
   account: 'تسجيل الدخول',
+  // شاشة الدخول (أول شي بعد اللوقو)
+  authTitle: 'هلا بك في DEAL Q8',
+  authMine: 'دخول بحسابي',
+  authNew: 'حساب جديد',
+  authGuest: 'دخول ضيف',
+  createAccount: 'إنشاء الحساب',
+  enterGame: 'دخول',
+  newPassword: 'كلمة السر (6 خانات أو أكثر)',
+  pleaseWait: 'لحظة...',
   accountHint: 'اختياري: سجّل عشان اسمك وشخصيتك ينحفظون',
   email: 'الإيميل',
   password: 'كلمة السر',
@@ -255,11 +264,11 @@ export const S = {
       case 'weakPassword':
         return 'كلمة السر لازم 6 خانات أو أكثر';
       case 'wrongLogin':
-        return 'الإيميل أو كلمة السر غلط';
+        return 'الإيميل أو كلمة السر غلط، أو الحساب مو مسجل';
       case 'emailTaken':
         return 'هالإيميل مسجل من قبل';
       case 'confirmEmail':
-        return 'الحساب يحتاج تأكيد الإيميل';
+        return 'الحساب يحتاج تأكيد الإيميل (اطفِ Confirm email من لوحة Supabase)';
       default:
         return 'ما قدرنا نتصل بالخادم';
     }

@@ -25,7 +25,8 @@ interface HomeScreenProps {
   /** إيميل الحساب إذا اللاعب مسجل دخوله، أو null للضيف */
   readonly email: string | null;
   readonly onProfileChange: (profile: Profile) => void;
-  readonly onSignedIn: (email: string, profile: Profile) => void;
+  /** الضيف يضغط "تسجيل الدخول": يروح لشاشة الدخول */
+  readonly onOpenAuth: () => void;
   readonly onSignedOut: () => void;
   readonly onPlayBots: (winTarget: WinTarget) => void;
   readonly onEnterRoom: (snapshot: RoomSnapshot) => void;
@@ -42,7 +43,7 @@ export function HomeScreen({
   avatar,
   email,
   onProfileChange,
-  onSignedIn,
+  onOpenAuth,
   onSignedOut,
   onPlayBots,
   onEnterRoom,
@@ -54,29 +55,6 @@ export function HomeScreen({
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // خانات الحساب: كلمة السر تبقى بهالنافذة فقط وتنمسح بعد الإرسال.
-  const [draftEmail, setDraftEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [accountNote, setAccountNote] = useState('');
-
-  /** دخول أو حساب جديد بالإيميل وكلمة السر. */
-  const submitAccount = (mode: 'signIn' | 'signUp') => {
-    if (!account || busy) return;
-    setBusy(true);
-    setAccountNote('');
-    const request = mode === 'signIn' ? account.signIn(draftEmail, password) : account.signUp(draftEmail, password, { name, avatar });
-    void request.then((result) => {
-      setBusy(false);
-      setPassword('');
-      if (result.ok) {
-        onSignedIn(result.email, result.profile);
-        setDialog(null);
-      } else {
-        setAccountNote(S.accountError(result.error));
-      }
-    });
-  };
-
   const signOut = () => {
     if (!account) return;
     void account.signOut().then(() => {
@@ -135,7 +113,7 @@ export function HomeScreen({
           <Text style={styles.helloText}>{S.hello(name.trim() === '' ? S.guest : name)}</Text>
         </Pressable>
         {account ? (
-          <Pressable testID="home-account" accessibilityRole="button" style={styles.settings} onPress={() => setDialog('account')}>
+          <Pressable testID="home-account" accessibilityRole="button" style={styles.settings} onPress={() => (email === null ? onOpenAuth() : setDialog('account'))}>
             <Text style={styles.small} numberOfLines={1}>
               {email ?? S.account}
             </Text>
@@ -290,57 +268,6 @@ export function HomeScreen({
                   <Pressable testID="account-signout" accessibilityRole="button" style={styles.primary} onPress={signOut}>
                     <Text style={styles.primaryText}>{S.signOut}</Text>
                   </Pressable>
-                </>
-              ) : null}
-
-              {dialog === 'account' && email === null ? (
-                <>
-                  <Text style={styles.sheetTitle}>{S.account}</Text>
-                  <Text style={styles.small}>{accountNote === '' ? S.accountHint : accountNote}</Text>
-                  <TextInput
-                    testID="email-input"
-                    accessibilityLabel={S.email}
-                    style={styles.input}
-                    placeholder={S.email}
-                    placeholderTextColor={theme.muted}
-                    value={draftEmail}
-                    onChangeText={setDraftEmail}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType="email-address"
-                    maxLength={120}
-                  />
-                  <TextInput
-                    testID="password-input"
-                    accessibilityLabel={S.password}
-                    style={styles.input}
-                    placeholder={S.password}
-                    placeholderTextColor={theme.muted}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    maxLength={72}
-                  />
-                  <View style={styles.row}>
-                    <Pressable
-                      testID="account-signin"
-                      accessibilityRole="button"
-                      style={[styles.primary, styles.flex]}
-                      onPress={() => submitAccount('signIn')}
-                    >
-                      <Text style={styles.primaryText}>{S.signIn}</Text>
-                    </Pressable>
-                    <Pressable
-                      testID="account-signup"
-                      accessibilityRole="button"
-                      style={[styles.secondary, styles.flex]}
-                      onPress={() => submitAccount('signUp')}
-                    >
-                      <Text style={styles.secondaryText}>{S.signUp}</Text>
-                    </Pressable>
-                  </View>
                 </>
               ) : null}
 

@@ -1,6 +1,6 @@
 // اختبارات منطق الغرفة والحكم — plan.md المرحلة 8
 // تنختبر هنا كدوال خالصة (بدون شبكة). التجربة على 4 أجهزة حقيقية ومع Supabase تبقى على صاحب المشروع.
-import { BOT_AVATAR } from '../../data/avatars';
+import { normalizeAvatar } from '../../data/avatars';
 import { BOT_NAMES } from '../../data/bots';
 import { buildDeck } from '../../data/cards';
 import { TURN_SECONDS } from '../../data/rules';
@@ -262,8 +262,9 @@ describe('البوتات بالغرفة', () => {
   it('لاعب يطلع بنص اللعبة: البوت يكمل مكانه واللعبة تستمر', () => {
     let room = started(['p0', 'p1', 'p2', 'p3'], 21);
     room = ok(leaveRoom(room, 'p2'));
-    // البوت اللي استلم المكان ياخذ اسم بوت من القائمة وشخصية الروبوت
-    expect(room.seats[2]).toMatchObject({ playerId: null, avatar: BOT_AVATAR, isBot: true, connected: false });
+    // البوت اللي استلم المكان ياخذ اسم بوت من القائمة وشخصية عشوائية من شخصيات اللاعبين
+    expect(room.seats[2]).toMatchObject({ playerId: null, isBot: true, connected: false });
+    expect(normalizeAvatar(room.seats[2]?.avatar)).toBe(room.seats[2]?.avatar);
     expect(BOT_NAMES).toContain(room.seats[2]?.name);
     expect(snapshotFor(room, 'p2')).toBeNull();
     expect(errorOf(submitMove(room, 'p2', { type: 'draw', seat: 2 }, 2000))).toBe('notInRoom');

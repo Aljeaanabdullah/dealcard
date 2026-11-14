@@ -122,76 +122,128 @@ describe('الشخصيات', () => {
   });
 });
 
-describe('الحساب بالإيميل (اختياري)', () => {
-  it('بدون خدمة حسابات ما يطلع زر تسجيل الدخول، واللعب كضيف يشتغل', async () => {
+describe('شاشة الدخول: حسابي / حساب جديد / ضيف', () => {
+  it('بدون خدمة حسابات: يدخل الرئيسية مباشرة كضيف وما يطلع زر تسجيل الدخول', async () => {
     const renderer = await render(null);
+    expect(buttons(renderer.root, 'auth-guest')).toHaveLength(0);
     expect(buttons(renderer.root, 'home-account')).toHaveLength(0);
     expect(buttons(renderer.root, 'home-bots')).toHaveLength(1);
     act(() => renderer.unmount());
   });
 
-  it('حساب جديد يحفظ الاسم والشخصية، وبعد الخروج والدخول يرجعون', async () => {
+  it('أول شي بعد اللوقو: ثلاث خيارات، والرئيسية ما تطلع قبل الاختيار', async () => {
+    const renderer = await render(createMemoryAccount(), 2500);
+    const root = renderer.root;
+    expect(has(root, 'splash')).toBe(true);
+    await act(async () => {
+      jest.advanceTimersByTime(2600);
+    });
+    expect(hasText(root, S.authTitle)).toBe(true);
+    for (const id of ['auth-mine', 'auth-new', 'auth-guest']) expect(buttons(root, id)).toHaveLength(1);
+    expect(buttons(root, 'home-bots')).toHaveLength(0);
+    // ما تطلع نافذة الاسم فوق شاشة الدخول
+    expect(hasText(root, S.enterName)).toBe(false);
+    act(() => renderer.unmount());
+  });
+
+  it('دخول ضيف: يكتب اسمه ويدخل الرئيسية بدون حساب', async () => {
+    const renderer = await render(createMemoryAccount());
+    const root = renderer.root;
+    await press(root, 'auth-guest');
+    // بدون اسم ينرفض
+    await press(root, 'auth-submit');
+    expect(hasText(root, S.netError('nameRequired'))).toBe(true);
+    expect(buttons(root, 'home-bots')).toHaveLength(0);
+
+    await type(root, 'auth-name', 'سالم');
+    await press(root, 'auth-submit');
+    expect(hasText(root, S.hello('سالم'))).toBe(true);
+    expect(buttons(root, 'home-bots')).toHaveLength(1);
+    // الاسم مكتوب، فنافذة الاسم ما تطلع
+    expect(hasText(root, S.enterName)).toBe(false);
+    // الضيف يشوف زر "تسجيل الدخول" ويرجّعه لشاشة الدخول
+    expect(hasText(root, S.account)).toBe(true);
+    await press(root, 'home-account');
+    expect(buttons(root, 'auth-mine')).toHaveLength(1);
+    act(() => renderer.unmount());
+  });
+
+  it('حساب جديد يدخّل اللاعب ويحفظ اسمه وشخصيته، وبعدها "دخول بحسابي" يرجّعهم', async () => {
     const account = createMemoryAccount();
     const renderer = await render(account);
     const root = renderer.root;
-    await type(root, 'name-input', 'سالم');
-    await press(root, 'name-save');
-    await press(root, 'edit-avatar');
-    await press(root, 'avatar-4');
-
-    await press(root, 'home-account');
-    expect(hasText(root, S.accountHint)).toBe(true);
-    await type(root, 'email-input', 'salem@example.com');
-    await type(root, 'password-input', 'secret1');
-    await press(root, 'account-signup');
+    await press(root, 'auth-new');
+    await type(root, 'auth-name', 'سالم');
+    await type(root, 'auth-email', 'salem@example.com');
+    await type(root, 'auth-password', 'secret1');
+    await press(root, 'auth-submit');
+    expect(hasText(root, S.hello('سالم'))).toBe(true);
     expect(hasText(root, 'salem@example.com')).toBe(true);
 
     // تعديل الشخصية وهو داخل بحسابه ينحفظ على الحساب
     await press(root, 'edit-avatar');
     await press(root, 'avatar-9');
 
+    // تسجيل الخروج يرجّع لشاشة الدخول
     await press(root, 'home-account');
     expect(hasText(root, S.signedInAs('salem@example.com'))).toBe(true);
     await press(root, 'account-signout');
-    expect(hasText(root, S.account)).toBe(true);
+    expect(buttons(root, 'auth-mine')).toHaveLength(1);
     act(() => renderer.unmount());
 
     // تشغيل جديد للتطبيق: دخول بنفس الحساب يرجّع الاسم والشخصية
     const again = await render(account);
-    await press(again.root, 'dialog-close');
-    await press(again.root, 'home-account');
-    await type(again.root, 'email-input', 'salem@example.com');
-    await type(again.root, 'password-input', 'secret1');
-    await press(again.root, 'account-signin');
+    await press(again.root, 'auth-mine');
+    // دخول بحسابي ما يطلب الاسم
+    expect(again.root.findAll((node) => node.props.testID === 'auth-name')).toHaveLength(0);
+    await type(again.root, 'auth-email', 'salem@example.com');
+    await type(again.root, 'auth-password', 'secret1');
+    await press(again.root, 'auth-submit');
     expect(hasText(again.root, S.hello('سالم'))).toBe(true);
     await press(again.root, 'edit-avatar');
     expect(buttons(again.root, 'avatar-9')[0]?.props.accessibilityState).toEqual({ selected: true });
     act(() => again.unmount());
   });
 
-  it('كلمة سر غلط تنرفض برسالة واضحة، وخانة كلمة السر مخفية وتنمسح', async () => {
+  it('حساب مو مسجل أو كلمة سر غلط: رسالة واضحة، يبقى بشاشة الدخول، وكلمة السر مخفية وتنمسح', async () => {
     const account = createMemoryAccount();
     await account.signUp('salem@example.com', 'secret1', { name: 'سالم', avatar: 0 });
     await account.signOut();
 
     const renderer = await render(account);
     const root = renderer.root;
-    await press(root, 'dialog-close');
-    await press(root, 'home-account');
-    await type(root, 'email-input', 'salem@example.com');
-    await type(root, 'password-input', 'wrong-pass');
-    const field = () => root.findAll((node) => node.props.testID === 'password-input' && typeof node.props.onChangeText === 'function')[0];
+    await press(root, 'auth-mine');
+    const field = () => root.findAll((node) => node.props.testID === 'auth-password' && typeof node.props.onChangeText === 'function')[0];
     expect(field()?.props.secureTextEntry).toBe(true);
 
-    await press(root, 'account-signin');
+    // حساب ما انسجل
+    await type(root, 'auth-email', 'nobody@example.com');
+    await type(root, 'auth-password', 'secret1');
+    await press(root, 'auth-submit');
     expect(hasText(root, S.accountError('wrongLogin'))).toBe(true);
     expect(field()?.props.value).toBe('');
-    expect(hasText(root, 'salem@example.com')).toBe(false);
+    expect(buttons(root, 'home-bots')).toHaveLength(0);
 
-    await type(root, 'email-input', 'salem');
-    await type(root, 'password-input', 'secret1');
-    await press(root, 'account-signin');
-    expect(hasText(root, S.accountError('invalidEmail'))).toBe(true);
+    // كلمة سر غلط
+    await type(root, 'auth-email', 'salem@example.com');
+    await type(root, 'auth-password', 'wrong-pass');
+    await press(root, 'auth-submit');
+    expect(hasText(root, S.accountError('wrongLogin'))).toBe(true);
+
+    // رجوع ثم حساب جديد بإيميل مسجل وبكلمة سر قصيرة
+    await press(root, 'auth-back');
+    await press(root, 'auth-new');
+    await type(root, 'auth-name', 'خالد');
+    await type(root, 'auth-email', 'salem@example.com');
+    await type(root, 'auth-password', 'another1');
+    await press(root, 'auth-submit');
+    expect(hasText(root, S.accountError('emailTaken'))).toBe(true);
+
+    await type(root, 'auth-email', 'khaled@example.com');
+    await type(root, 'auth-password', '123');
+    await press(root, 'auth-submit');
+    expect(hasText(root, S.accountError('weakPassword'))).toBe(true);
+    expect(buttons(root, 'home-bots')).toHaveLength(0);
     act(() => renderer.unmount());
   });
 });

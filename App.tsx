@@ -8,6 +8,7 @@ import type { Account, Profile } from './src/net/account';
 import type { RoomSnapshot } from './src/net/room';
 import { createSupabaseBackend } from './src/net/supabaseTransport';
 import type { Transport } from './src/net/transport';
+import { AuthScreen } from './src/ui/AuthScreen';
 import { GameScreen } from './src/ui/GameScreen';
 import { HomeScreen } from './src/ui/HomeScreen';
 import { OnlineGame } from './src/ui/OnlineGame';
@@ -15,6 +16,7 @@ import { SplashScreen } from './src/ui/SplashScreen';
 
 type Screen =
   | { readonly kind: 'splash' }
+  | { readonly kind: 'auth' }
   | { readonly kind: 'home' }
   | { readonly kind: 'bots'; readonly winTarget: WinTarget; readonly seed: number }
   | { readonly kind: 'online'; readonly snapshot: RoomSnapshot };
@@ -37,7 +39,9 @@ export default function App({ transport, account, splashMs = SPLASH_MS }: AppPro
     if (transport !== undefined) return { transport, account: account ?? null };
     return createSupabaseBackend() ?? { transport: null, account: null };
   });
-  const [screen, setScreen] = useState<Screen>(splashMs > 0 ? { kind: 'splash' } : { kind: 'home' });
+  // بعد اللوقو: شاشة الدخول (حسابي / حساب جديد / ضيف). بدون خدمة حسابات يروح للرئيسية مباشرة كضيف.
+  const first: Screen = backend.account ? { kind: 'auth' } : { kind: 'home' };
+  const [screen, setScreen] = useState<Screen>(splashMs > 0 ? { kind: 'splash' } : first);
   // الاسم والشخصية يبقون طول ما التطبيق مفتوح، وينحفظون على الحساب إذا اللاعب مسجل دخوله.
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
@@ -58,7 +62,24 @@ export default function App({ transport, account, splashMs = SPLASH_MS }: AppPro
     <SafeAreaProvider>
       <StatusBar hidden />
       {screen.kind === 'splash' ? (
-        <SplashScreen durationMs={splashMs} onDone={goHome} />
+        <SplashScreen durationMs={splashMs} onDone={() => setScreen(first)} />
+      ) : screen.kind === 'auth' && backend.account ? (
+        <AuthScreen
+          account={backend.account}
+          name={name}
+          avatar={avatar}
+          onSignedIn={(signedEmail, profile) => {
+            setEmail(signedEmail);
+            // الحساب اللي ما فيه اسم محفوظ يحتفظ بالاسم الحالي.
+            setName(profile.name === '' ? name : profile.name);
+            setAvatar(profile.avatar);
+            goHome();
+          }}
+          onGuest={(guestName) => {
+            setName(guestName);
+            goHome();
+          }}
+        />
       ) : screen.kind === 'bots' ? (
         <GameScreen
           key={screen.seed}
@@ -84,13 +105,11 @@ export default function App({ transport, account, splashMs = SPLASH_MS }: AppPro
           avatar={avatar}
           email={email}
           onProfileChange={changeProfile}
-          onSignedIn={(signedEmail, profile) => {
-            setEmail(signedEmail);
-            // الحساب اللي ما فيه اسم محفوظ يحتفظ بالاسم الحالي.
-            setName(profile.name === '' ? name : profile.name);
-            setAvatar(profile.avatar);
+          onOpenAuth={() => setScreen({ kind: 'auth' })}
+          onSignedOut={() => {
+            setEmail(null);
+            setScreen({ kind: 'auth' });
           }}
-          onSignedOut={() => setEmail(null)}
           onPlayBots={playBots}
           onEnterRoom={enterRoom}
         />

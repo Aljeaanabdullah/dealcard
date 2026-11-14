@@ -59,7 +59,8 @@ check(started.ok && started.snapshot.status === 'playing', 'صاحب الغرف�
 check(started.snapshot.seats.map((s) => s.isBot).join() === 'false,false,true,true', 'البوتات تكمل العدد إلى 4');
 const BOT_NAMES = ['bo hany', 'Thyab', 'Bo3zozQ8', 'Bo3thab', 'Miry', 'komar'];
 const botSeats = started.snapshot.seats.filter((s) => s.isBot);
-check(botSeats.every((s) => BOT_NAMES.includes(s.name) && s.avatar === -1), `البوتات بأسماء من القائمة وشخصية الروبوت: ${botSeats.map((s) => s.name).join('، ')}`);
+check(botSeats.every((s) => BOT_NAMES.includes(s.name) && s.avatar >= 0 && s.avatar < 12), `البوتات بأسماء من القائمة وشخصيات عشوائية: ${botSeats.map((s) => `${s.name} (${s.avatar})`).join('، ')}`);
+check(new Set(started.snapshot.seats.map((s) => s.avatar)).size >= 3, 'شخصيات البوتات مختلفة عن بعض');
 check(botSeats[0].name !== botSeats[1].name, 'أسماء البوتات مختلفة');
 
 // إخفاء الأيدي

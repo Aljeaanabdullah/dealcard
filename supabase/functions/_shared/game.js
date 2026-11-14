@@ -1404,6 +1404,13 @@ function chooseMove(state, seat, rng) {
   return best[randomInt(rng, best.length)] ?? null;
 }
 
+// src/data/avatars.ts
+var AVATAR_COUNT = 12;
+var DEFAULT_AVATAR = 0;
+function normalizeAvatar(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < AVATAR_COUNT ? value : DEFAULT_AVATAR;
+}
+
 // src/data/bots.ts
 var BOT_NAMES = ["bo hany", "Thyab", "Bo3zozQ8", "Bo3thab", "Miry", "komar"];
 
@@ -1418,13 +1425,16 @@ function pickBotNames(rng, count, taken = []) {
   }
   return picked;
 }
-
-// src/data/avatars.ts
-var AVATAR_COUNT = 12;
-var DEFAULT_AVATAR = 0;
-var BOT_AVATAR = -1;
-function normalizeAvatar(value) {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < AVATAR_COUNT ? value : DEFAULT_AVATAR;
+function pickBotAvatars(rng, count, taken = []) {
+  const all = Array.from({ length: AVATAR_COUNT }, (_, index) => index);
+  let pool = all.filter((avatar) => !taken.includes(avatar));
+  const picked = [];
+  while (picked.length < count) {
+    if (pool.length === 0) pool = all.slice();
+    const [avatar] = pool.splice(randomInt(rng, pool.length), 1);
+    if (avatar !== void 0) picked.push(avatar);
+  }
+  return picked;
 }
 
 // src/engine/state.ts
@@ -1590,14 +1600,20 @@ function startRoom(room, playerId, seed, now) {
 function begin(room, seed, now) {
   if (room.status !== "lobby") return fail2("alreadyStarted");
   const seats = [...room.seats];
+  const identityRng = createRng(seed + 1);
   const botNames = pickBotNames(
-    createRng(seed + 1),
+    identityRng,
     PLAYER_COUNT - seats.length,
     seats.map((seat) => seat.name)
   );
-  for (const name of botNames) {
-    seats.push({ playerId: null, name, avatar: BOT_AVATAR, isBot: true, connected: true });
-  }
+  const botAvatars = pickBotAvatars(
+    identityRng,
+    botNames.length,
+    seats.map((seat) => normalizeAvatar(seat.avatar))
+  );
+  botNames.forEach((name, index) => {
+    seats.push({ playerId: null, name, avatar: botAvatars[index] ?? DEFAULT_AVATAR, isBot: true, connected: true });
+  });
   const rng = createRng(seed);
   const game = createGame(seed, room.winTarget);
   return {
@@ -1647,17 +1663,23 @@ function leaveRoom(room, playerId) {
     const nextHost = seats[0]?.playerId ?? room.hostId;
     return { ok: true, room: { ...room, seats, hostId: playerId === room.hostId ? nextHost : room.hostId } };
   }
+  const identityRng = createRng(room.botSeed + seat + 1);
   const [botName] = pickBotNames(
-    createRng(room.botSeed + seat + 1),
+    identityRng,
     1,
     room.seats.map((s) => s.name)
+  );
+  const [botAvatar] = pickBotAvatars(
+    identityRng,
+    1,
+    room.seats.map((s) => normalizeAvatar(s.avatar))
   );
   return {
     ok: true,
     room: {
       ...room,
       seats: room.seats.map(
-        (s, index) => index === seat ? { ...s, playerId: null, name: botName ?? s.name, avatar: BOT_AVATAR, isBot: true, connected: false } : s
+        (s, index) => index === seat ? { ...s, playerId: null, name: botName ?? s.name, avatar: botAvatar ?? DEFAULT_AVATAR, isBot: true, connected: false } : s
       )
     }
   };
@@ -1718,7 +1740,7 @@ function snapshotFor(room, playerId) {
     isHost: playerId === room.hostId,
     seats: room.seats.map((seat) => ({
       name: seat.name,
-      avatar: seat.isBot ? BOT_AVATAR : normalizeAvatar(seat.avatar),
+      avatar: normalizeAvatar(seat.avatar),
       isBot: seat.isBot,
       connected: seat.connected
     })),
