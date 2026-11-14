@@ -21,7 +21,7 @@ import {
   startRoom,
   submitMove,
   tick,
-} from 'https://raw.githubusercontent.com/Aljeaanabdullah/dealcard/2bda550a1f89b149e4bd6486c3d0a717901b2cfb/supabase/functions/_shared/game.js';
+} from 'https://raw.githubusercontent.com/Aljeaanabdullah/dealcard/98f9418e969d0eaca6dceaaa79f1f9c72fe43661/supabase/functions/_shared/game.js';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
