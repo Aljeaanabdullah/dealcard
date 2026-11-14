@@ -1,7 +1,11 @@
 // مدخل كود الخادم: نفس منطق الغرفة والمحرك، ينحزم بملف واحد لدالة Supabase (npm run build:server).
 export {
+  createMatchRoom,
   createRoom,
   generateRoomCode,
+  isActiveFor,
+  isOpenMatch,
+  joinMatchRoom,
   joinRoom,
   leaveRoom,
   setWinTarget,

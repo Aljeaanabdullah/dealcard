@@ -19,6 +19,12 @@ export const S = {
   codePlaceholder: 'كود الغرفة',
   onlineUnavailable: 'اللعب أونلاين يحتاج إعداد Supabase',
 
+  // اللعب العشوائي
+  searching: 'جاري البحث عن لاعبين',
+  searchingHint: 'شرط الفوز: 6 أطقم مختلفة',
+  botsIn: (seconds: number) => `البوتات تكمل العدد بعد ${seconds} ثانية`,
+  cancelSearch: 'إلغاء',
+
   // غرفة الانتظار
   lobbyTitle: 'غرفة الانتظار',
   playersCount: (n: number) => `اللاعبون ${n} من 4`,

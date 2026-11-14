@@ -57,6 +57,16 @@ export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterR
     enter(transport.createRoom(name));
   };
 
+  /** لعب عشوائي: يدخل طابور المطابقة. */
+  const joinRandom = () => {
+    if (!transport) return;
+    if (name.trim() === '') {
+      setDialog('name');
+      return;
+    }
+    enter(transport.joinRandom(name));
+  };
+
   const joinRoom = () => {
     if (!transport) return;
     setDialog(null);
@@ -80,14 +90,21 @@ export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterR
       <Text style={styles.note}>{transport === null ? S.onlineUnavailable : error}</Text>
 
       <View style={styles.cards}>
-        {/* لعب عشوائي: المرحلة 9، ما انبنت بعد */}
-        <View testID="home-random" style={[styles.card, styles.cardGold, styles.disabled]}>
-          <Text style={styles.soon}>{S.soon}</Text>
+        {/* لعب عشوائي: مطابقة تلقائية، والبوتات تكمل العدد بعد 30 ثانية */}
+        <Pressable
+          testID="home-random"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !online }}
+          disabled={!online}
+          style={[styles.card, styles.cardGold, !online && styles.disabled]}
+          onPress={joinRandom}
+        >
+          <View style={[styles.mark, styles.markDark]} />
           <View>
             <Text style={[styles.cardTitle, styles.dark]}>{S.randomPlay}</Text>
             <Text style={[styles.cardDesc, styles.dark]}>{S.randomDesc}</Text>
           </View>
-        </View>
+        </Pressable>
 
         <Pressable
           testID="create-room"
@@ -283,16 +300,8 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: theme.gold,
   },
-  soon: {
-    alignSelf: 'flex-start',
-    color: theme.cardInk,
-    fontSize: 13,
-    fontWeight: '800',
-    borderWidth: 2,
-    borderColor: theme.cardInk,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  markDark: {
+    backgroundColor: theme.cardInk,
   },
   cardTitle: {
     color: theme.text,

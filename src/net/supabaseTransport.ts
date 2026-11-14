@@ -39,6 +39,7 @@ export function createSupabaseTransport(): Transport | null {
   return {
     createRoom: (name) => call({ action: 'create', name }),
     joinRoom: (code, name) => call({ action: 'join', code, name }),
+    joinRandom: (name) => call({ action: 'random', name }),
     setWinTarget: (code, winTarget) => call({ action: 'setWinTarget', code, winTarget }),
     start: (code) => call({ action: 'start', code }),
     sendMove: (code, move: Move) => call({ action: 'move', code, move }),

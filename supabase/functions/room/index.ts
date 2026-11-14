@@ -8,9 +8,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 import {
+  createMatchRoom,
   createRng,
   createRoom,
   generateRoomCode,
+  joinMatchRoom,
   joinRoom,
   leaveRoom,
   setWinTarget,
@@ -32,7 +34,10 @@ function json(body: unknown, status = 200): Response {
 /** أقل شكل نحتاجه من الغرفة هنا. التفاصيل الكاملة داخل الحزمة المختبرة. */
 interface RoomLike {
   readonly code: string;
+  readonly status: string;
   readonly seats: readonly { readonly playerId: string | null }[];
+  /** غرفة لعب عشوائي */
+  readonly match?: unknown;
 }
 
 interface ActionResult {
@@ -63,13 +68,21 @@ Deno.serve(async (req) => {
 
   /** يحفظ الغرفة (مع فحص النسخة) ويكتب لقطة كل لاعب بشري. */
   async function save(room: RoomLike, version: number | null): Promise<boolean> {
+    // أعمدة مساعدة للطابور العشوائي ولمعرفة غرفة اللاعب الحالية.
+    const columns = {
+      state: room,
+      status: room.status,
+      matchmaking: Boolean(room.match),
+      seat_count: room.seats.length,
+      player_ids: room.seats.map((seat) => seat.playerId).filter((id) => id !== null),
+    };
     if (version === null) {
-      const { error } = await admin.from('rooms').insert({ code: room.code, state: room, version: 1 });
+      const { error } = await admin.from('rooms').insert({ code: room.code, version: 1, ...columns });
       if (error) return false;
     } else {
       const { data, error } = await admin
         .from('rooms')
-        .update({ state: room, version: version + 1, updated_at: new Date(now).toISOString() })
+        .update({ ...columns, version: version + 1, updated_at: new Date(now).toISOString() })
         .eq('code', room.code)
         .eq('version', version)
         .select('code');
@@ -97,6 +110,50 @@ Deno.serve(async (req) => {
       if (await save(created.room, null)) return json({ ok: true, snapshot: snapshotFor(created.room, playerId) });
     }
     return json({ ok: false, error: 'network' }, 500);
+  }
+
+  // اللعب العشوائي: طابور يجمع اللاعبين في غرف من 4.
+  if (action === 'random') {
+    const name = String(body.name ?? '');
+    for (let attempt = 0; attempt < 5; attempt++) {
+      // لاعب ما يدخل مباراتين بنفس الوقت: إذا هو داخل غرفة ما انتهت يرجع لها.
+      const { data: mine } = await admin
+        .from('rooms')
+        .select('state')
+        .contains('player_ids', [playerId])
+        .in('status', ['lobby', 'playing'])
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (mine) return json({ ok: true, snapshot: snapshotFor(mine.state, playerId) });
+
+      // أقدم غرفة عشوائية مفتوحة وفيها مكان.
+      const { data: open } = await admin
+        .from('rooms')
+        .select('state, version')
+        .eq('matchmaking', true)
+        .eq('status', 'lobby')
+        .gt('seat_count', 0)
+        .lt('seat_count', 4)
+        .order('updated_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (open) {
+        const joined: ActionResult = joinMatchRoom(open.state, playerId, name, now);
+        if (!joined.ok) return json(joined);
+        if (!joined.room) return json({ ok: false, error: 'network' }, 500);
+        // إذا لاعب ثاني دخل بنفس اللحظة نعيد المحاولة.
+        if (await save(joined.room, open.version)) return json({ ok: true, snapshot: snapshotFor(joined.room, playerId) });
+        continue;
+      }
+
+      const created: ActionResult = createMatchRoom(generateRoomCode(createRng(randomSeed())), playerId, name, randomSeed(), now);
+      if (!created.ok) return json(created);
+      if (!created.room) return json({ ok: false, error: 'network' }, 500);
+      if (await save(created.room, null)) return json({ ok: true, snapshot: snapshotFor(created.room, playerId) });
+    }
+    return json({ ok: false, error: 'network' }, 409);
   }
 
   const code = String(body.code ?? '').toUpperCase();

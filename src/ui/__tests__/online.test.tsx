@@ -244,3 +244,82 @@ describe('غرفة خاصة بكود', () => {
     act(() => renderer.unmount());
   });
 });
+
+describe('اللعب العشوائي', () => {
+  it('شاشة "جاري البحث عن لاعبين" مع زر إلغاء، والإلغاء يطلّع اللاعب من الطابور', async () => {
+    const host = createMemoryHost(5, () => Date.now());
+    const renderer = await render(host.transportFor('me'));
+    const root = renderer.root;
+    await enterName(root, 'سالم');
+
+    expect(await press(root, 'home-random')).toBe(true);
+    expect(hasText(root, S.searching)).toBe(true);
+    expect(hasText(root, S.playersCount(1))).toBe(true);
+    expect(hasText(root, S.botsIn(30))).toBe(true);
+    // ما فيه كود غرفة ولا زر بدء بالبحث العشوائي
+    expect(hasText(root, S.roomCode)).toBe(false);
+    expect(pressables(root, 'lobby-start')).toHaveLength(0);
+
+    // العدّاد ينقص
+    await advance(10000);
+    expect(hasText(root, S.botsIn(20))).toBe(true);
+
+    expect(await press(root, 'search-cancel')).toBe(true);
+    expect(pressables(root, 'home-bots')).toHaveLength(1);
+    await advance(40000);
+    // اللاعب طلع من الطابور وما دخل مباراة
+    expect(hasText(root, S.drawPile)).toBe(false);
+    act(() => renderer.unmount());
+  });
+
+  it('لاعب لوحده: بعد 30 ثانية تبدأ المباراة مع 3 بوتات', async () => {
+    const host = createMemoryHost(6, () => Date.now());
+    const renderer = await render(host.transportFor('me'));
+    const root = renderer.root;
+    await enterName(root, 'سالم');
+    await press(root, 'home-random');
+
+    await advance(29000);
+    expect(hasText(root, S.searching)).toBe(true);
+    expect(hasText(root, S.drawPile)).toBe(false);
+
+    await advance(2000);
+    expect(hasText(root, S.searching)).toBe(false);
+    expect(hasText(root, S.drawPile)).toBe(true);
+    expect(hasText(root, S.bot(1))).toBe(true);
+    expect(hasText(root, S.bot(2))).toBe(true);
+    expect(hasText(root, S.bot(3))).toBe(true);
+    expect(pressables(root, 'hand-')).toHaveLength(5);
+    act(() => renderer.unmount());
+  });
+
+  it('لاعبين يضغطون لعب عشوائي ويدخلون نفس الغرفة، وكل واحد يشوف الثاني', async () => {
+    const host = createMemoryHost(8, () => Date.now());
+    const mine = await render(host.transportFor('me'));
+    const theirs = await render(host.transportFor('friend'));
+    await enterName(mine.root, 'سالم');
+    await enterName(theirs.root, 'خالد');
+
+    await press(mine.root, 'home-random');
+    await press(theirs.root, 'home-random');
+    await advance(300);
+
+    expect(hasText(mine.root, S.playersCount(2))).toBe(true);
+    expect(hasText(theirs.root, S.playersCount(2))).toBe(true);
+    expect(hasText(mine.root, 'خالد')).toBe(true);
+    expect(hasText(theirs.root, 'سالم')).toBe(true);
+
+    act(() => mine.unmount());
+    act(() => theirs.unmount());
+  });
+
+  it('بدون اسم: لعب عشوائي يطلب الاسم أول', async () => {
+    const host = createMemoryHost(9, () => Date.now());
+    const renderer = await render(host.transportFor('me'));
+    await press(renderer.root, 'dialog-close');
+    await press(renderer.root, 'home-random');
+    expect(hasText(renderer.root, S.enterName)).toBe(true);
+    expect(hasText(renderer.root, S.searching)).toBe(false);
+    act(() => renderer.unmount());
+  });
+});

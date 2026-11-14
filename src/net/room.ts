@@ -3,7 +3,14 @@
 // الوقت يدخل كرقم (now) من الخادم؛ هذا الملف ما يقرأ وقت النظام.
 
 import { chooseMove } from '../bot/bot';
-import { PLAYER_COUNT, TURN_SECONDS, WIN_TARGETS, type WinTarget } from '../data/rules';
+import {
+  MATCH_WAIT_SECONDS,
+  PLAYER_COUNT,
+  RANDOM_MATCH_WIN_TARGET,
+  TURN_SECONDS,
+  WIN_TARGETS,
+  type WinTarget,
+} from '../data/rules';
 import { applyMove, legalMoves, seatsToAct, type Move, type MoveError } from '../engine/moves';
 import { suggestPayment } from '../engine/payment';
 import { createRng, nextSeed, randomInt, type Rng } from '../engine/rng';
@@ -42,6 +49,11 @@ export interface Room {
   readonly turnDeadline: number;
   /** بذرة عشوائية البوتات */
   readonly botSeed: number;
+  /**
+   * غرفة لعب عشوائي (مطابقة تلقائية): وقت فتحها وبذرة الخلط.
+   * بدونها = غرفة خاصة بكود.
+   */
+  readonly match?: { readonly openedAt: number; readonly seed: number } | null;
 }
 
 export type RoomError =
@@ -53,6 +65,7 @@ export type RoomError =
   | 'notHost'
   | 'notInRoom'
   | 'invalidWinTarget'
+  | 'fixedWinTarget'
   | MoveError;
 
 export type RoomResult = { readonly ok: true; readonly room: Room } | { readonly ok: false; readonly error: RoomError };
@@ -108,8 +121,37 @@ export function joinRoom(room: Room, playerId: string, name: string): RoomResult
   };
 }
 
+// ---------------- اللعب العشوائي (المرحلة 9) ----------------
+
+/** غرفة لعب عشوائي جديدة: شرط الفوز ثابت، وتبدأ تلقائياً. */
+export function createMatchRoom(code: string, playerId: string, name: string, seed: number, now: number): RoomResult {
+  const created = createRoom(code, playerId, name);
+  if (!created.ok) return created;
+  return { ok: true, room: { ...created.room, winTarget: RANDOM_MATCH_WIN_TARGET, match: { openedAt: now, seed } } };
+}
+
+/** لاعب يدخل غرفة لعب عشوائي مفتوحة. إذا اكتمل 4 لاعبين اللعبة تبدأ مباشرة. */
+export function joinMatchRoom(room: Room, playerId: string, name: string, now: number): RoomResult {
+  if (!room.match) return fail('notInRoom');
+  const joined = joinRoom(room, playerId, name);
+  if (!joined.ok) return joined;
+  return joined.room.seats.length >= PLAYER_COUNT ? begin(joined.room, room.match.seed, now) : joined;
+}
+
+/** غرفة لعب عشوائي تنتظر لاعبين وفيها مكان. الغرفة الفاضية (كلهم ألغوا) ما تنحسب. */
+export function isOpenMatch(room: Room): boolean {
+  return Boolean(room.match) && room.status === 'lobby' && room.seats.length > 0 && room.seats.length < PLAYER_COUNT;
+}
+
+/** اللاعب داخل هالغرفة وهي ما انتهت (انتظار أو لعب). */
+export function isActiveFor(room: Room, playerId: string): boolean {
+  return room.status !== 'finished' && seatOf(room, playerId) >= 0;
+}
+
 /** شرط الفوز يختاره صاحب الغرفة قبل بداية اللعبة. */
 export function setWinTarget(room: Room, playerId: string, winTarget: number): RoomResult {
+  // اللعب العشوائي شرط فوزه ثابت.
+  if (room.match) return fail('fixedWinTarget');
   if (playerId !== room.hostId) return fail('notHost');
   if (room.status !== 'lobby') return fail('alreadyStarted');
   const target = WIN_TARGETS.find((allowed) => allowed === winTarget);
@@ -119,7 +161,13 @@ export function setWinTarget(room: Room, playerId: string, winTarget: number): R
 
 /** صاحب الغرفة يبدأ اللعبة، والبوتات تكمل العدد إلى 4. */
 export function startRoom(room: Room, playerId: string, seed: number, now: number): RoomResult {
-  if (playerId !== room.hostId) return fail('notHost');
+  // اللعب العشوائي يبدأ تلقائياً (لما يكتمل العدد أو تخلص مهلة الانتظار)، مو بيد لاعب.
+  if (room.match || playerId !== room.hostId) return fail('notHost');
+  return begin(room, seed, now);
+}
+
+/** يبدأ اللعبة: البوتات تكمل العدد إلى 4، ثم الخلط والتوزيع. */
+function begin(room: Room, seed: number, now: number): RoomResult {
   if (room.status !== 'lobby') return fail('alreadyStarted');
 
   const seats: Seat[] = [...room.seats];
@@ -202,6 +250,13 @@ export function leaveRoom(room: Room, playerId: string): RoomResult {
  * ترجّع نفس الغرفة إذا ما فيه شي ينسوى.
  */
 export function tick(room: Room, now: number): Room {
+  // اللعب العشوائي: إذا خلصت مهلة الانتظار وما اكتمل العدد، البوتات تكمل وتبدأ اللعبة.
+  if (room.status === 'lobby' && room.match && room.seats.length > 0) {
+    if (now < room.match.openedAt + MATCH_WAIT_SECONDS * 1000) return room;
+    const started = begin(room, room.match.seed, now);
+    return started.ok ? started.room : room;
+  }
+
   const game = room.game;
   if (room.status !== 'playing' || !game) return room;
 
@@ -259,6 +314,10 @@ export interface RoomSnapshot {
   readonly lastMove: Move | null;
   readonly lastAttack: Move | null;
   readonly turnDeadline: number;
+  /** غرفة لعب عشوائي (شاشة "جاري البحث عن لاعبين") */
+  readonly matchmaking: boolean;
+  /** موعد بدء المباراة العشوائية إذا ما اكتمل العدد (بالملي ثانية)، أو 0 */
+  readonly matchDeadline: number;
 }
 
 export function snapshotFor(room: Room, playerId: string): RoomSnapshot | null {
@@ -277,5 +336,7 @@ export function snapshotFor(room: Room, playerId: string): RoomSnapshot | null {
     lastMove: room.lastMove,
     lastAttack: room.lastAttack ?? null,
     turnDeadline: room.turnDeadline,
+    matchmaking: Boolean(room.match),
+    matchDeadline: room.match ? room.match.openedAt + MATCH_WAIT_SECONDS * 1000 : 0,
   };
 }

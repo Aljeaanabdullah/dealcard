@@ -49,6 +49,32 @@ export function OnlineGame({ transport, initial, onExit }: OnlineGameProps) {
     onExit();
   };
 
+  // اللعب العشوائي: شاشة "جاري البحث عن لاعبين" مع زر إلغاء.
+  if ((snapshot.status === 'lobby' || !snapshot.state) && snapshot.matchmaking) {
+    const secondsToStart = Math.max(0, Math.ceil((snapshot.matchDeadline - now) / 1000));
+    const slots = Array.from({ length: PLAYER_COUNT }, (_, index) => snapshot.seats[index]);
+    return (
+      <SafeAreaView style={[styles.root, styles.search]} edges={['top', 'bottom', 'left', 'right']}>
+        <Text style={styles.searchTitle}>{S.searching}</Text>
+        <Text style={styles.small}>{S.searchingHint}</Text>
+        <Text testID="search-count" style={styles.title}>
+          {S.playersCount(snapshot.seats.length)}
+        </Text>
+        <View style={styles.searchSlots}>
+          {slots.map((seat, index) => (
+            <View key={index} style={[styles.searchSlot, !seat && styles.slotEmpty]}>
+              <Text style={styles.name}>{seat ? (index === snapshot.mySeat ? S.you : seat.name) : S.emptySeat}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={styles.waiting}>{S.botsIn(secondsToStart)}</Text>
+        <Pressable testID="search-cancel" accessibilityRole="button" style={[styles.secondary, styles.searchCancel]} onPress={leave}>
+          <Text style={styles.secondaryText}>{S.cancelSearch}</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
   if (snapshot.status === 'lobby' || !snapshot.state) {
     const slots = Array.from({ length: PLAYER_COUNT }, (_, index) => snapshot.seats[index]);
     return (
@@ -127,6 +153,35 @@ const styles = StyleSheet.create({
     backgroundColor: theme.ground,
     padding: 14,
     gap: 14,
+  },
+  search: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  searchTitle: {
+    color: theme.gold,
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  searchSlots: {
+    flexDirection: 'row',
+    gap: 8,
+    alignSelf: 'stretch',
+  },
+  searchSlot: {
+    flex: 1,
+    minHeight: 54,
+    borderRadius: 12,
+    backgroundColor: theme.felt,
+    borderWidth: 2,
+    borderColor: theme.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchCancel: {
+    width: 220,
   },
   players: {
     flex: 3,

@@ -2,6 +2,7 @@
 // يُستخدم للاختبارات، ويثبت أن التطبيق يشتغل على واجهة Transport قبل ربط Supabase.
 
 import { createRng, nextSeed } from '../engine/rng';
+import { joinRandomMatch } from './matchmaking';
 import {
   createRoom,
   generateRoomCode,
@@ -71,6 +72,12 @@ export function createMemoryHost(seed: number, now: () => number): MemoryHost {
         return commit(createRoom(code, playerId, name), playerId);
       },
       joinRoom: async (code, name) => withRoom(code, playerId, (room) => joinRoom(room, playerId, name)),
+      joinRandom: async (name) => {
+        let code = generateRoomCode(createRng(random()));
+        while (rooms.has(code)) code = generateRoomCode(createRng(random()));
+        const matched = joinRandomMatch([...rooms.values()], playerId, name, code, random(), now());
+        return matched.ok ? commit({ ok: true, room: matched.room }, playerId) : matched;
+      },
       setWinTarget: async (code, winTarget) => withRoom(code, playerId, (room) => setWinTarget(room, playerId, winTarget)),
       start: async (code) => withRoom(code, playerId, (room) => startRoom(room, playerId, random(), now())),
       sendMove: async (code, move) => withRoom(code, playerId, (room) => submitMove(room, playerId, move, now())),

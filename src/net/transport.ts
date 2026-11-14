@@ -14,6 +14,8 @@ export type NetResult =
 export interface Transport {
   createRoom(name: string): Promise<NetResult>;
   joinRoom(code: string, name: string): Promise<NetResult>;
+  /** لعب عشوائي: يدخل اللاعب طابور المطابقة. الإلغاء = leave بكود الغرفة اللي رجعت. */
+  joinRandom(name: string): Promise<NetResult>;
   setWinTarget(code: string, winTarget: number): Promise<NetResult>;
   start(code: string): Promise<NetResult>;
   sendMove(code: string, move: Move): Promise<NetResult>;

@@ -117,6 +117,8 @@ var MAX_PLAYS_PER_TURN = 3;
 var MAX_HAND_SIZE = 7;
 var WIN_TARGETS = [6, 8];
 var TURN_SECONDS = 90;
+var MATCH_WAIT_SECONDS = 30;
+var RANDOM_MATCH_WIN_TARGET = 6;
 
 // src/engine/sets.ts
 function isSetComplete(properties, color) {
@@ -1597,7 +1599,25 @@ function joinRoom(room, playerId, name) {
     room: { ...room, seats: [...room.seats, { playerId, name: name.trim(), isBot: false, connected: true }] }
   };
 }
+function createMatchRoom(code, playerId, name, seed, now) {
+  const created = createRoom(code, playerId, name);
+  if (!created.ok) return created;
+  return { ok: true, room: { ...created.room, winTarget: RANDOM_MATCH_WIN_TARGET, match: { openedAt: now, seed } } };
+}
+function joinMatchRoom(room, playerId, name, now) {
+  if (!room.match) return fail2("notInRoom");
+  const joined = joinRoom(room, playerId, name);
+  if (!joined.ok) return joined;
+  return joined.room.seats.length >= PLAYER_COUNT ? begin(joined.room, room.match.seed, now) : joined;
+}
+function isOpenMatch(room) {
+  return Boolean(room.match) && room.status === "lobby" && room.seats.length > 0 && room.seats.length < PLAYER_COUNT;
+}
+function isActiveFor(room, playerId) {
+  return room.status !== "finished" && seatOf(room, playerId) >= 0;
+}
 function setWinTarget(room, playerId, winTarget) {
+  if (room.match) return fail2("fixedWinTarget");
   if (playerId !== room.hostId) return fail2("notHost");
   if (room.status !== "lobby") return fail2("alreadyStarted");
   const target = WIN_TARGETS.find((allowed) => allowed === winTarget);
@@ -1605,7 +1625,10 @@ function setWinTarget(room, playerId, winTarget) {
   return { ok: true, room: { ...room, winTarget: target } };
 }
 function startRoom(room, playerId, seed, now) {
-  if (playerId !== room.hostId) return fail2("notHost");
+  if (room.match || playerId !== room.hostId) return fail2("notHost");
+  return begin(room, seed, now);
+}
+function begin(room, seed, now) {
   if (room.status !== "lobby") return fail2("alreadyStarted");
   const seats = [...room.seats];
   while (seats.length < PLAYER_COUNT) {
@@ -1669,6 +1692,11 @@ function leaveRoom(room, playerId) {
   };
 }
 function tick(room, now) {
+  if (room.status === "lobby" && room.match && room.seats.length > 0) {
+    if (now < room.match.openedAt + MATCH_WAIT_SECONDS * 1e3) return room;
+    const started = begin(room, room.match.seed, now);
+    return started.ok ? started.room : room;
+  }
   const game = room.game;
   if (room.status !== "playing" || !game) return room;
   const seats = seatsToAct(game);
@@ -1722,13 +1750,19 @@ function snapshotFor(room, playerId) {
     moves: game ? legalMoves(game).filter((move) => move.seat === mySeat) : [],
     lastMove: room.lastMove,
     lastAttack: room.lastAttack ?? null,
-    turnDeadline: room.turnDeadline
+    turnDeadline: room.turnDeadline,
+    matchmaking: Boolean(room.match),
+    matchDeadline: room.match ? room.match.openedAt + MATCH_WAIT_SECONDS * 1e3 : 0
   };
 }
 export {
+  createMatchRoom,
   createRng,
   createRoom,
   generateRoomCode,
+  isActiveFor,
+  isOpenMatch,
+  joinMatchRoom,
   joinRoom,
   leaveRoom,
   setWinTarget,
