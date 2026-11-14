@@ -121,11 +121,14 @@ function OpponentPanel({
       testID={targeted ? `targeted-${seat}` : undefined}
       style={[styles.panel, row ? styles.panelRow : styles.panelColumn, active && styles.panelActive, targeted && styles.panelTargeted]}
     >
-      <View style={styles.info}>
+      {/* الاسم وعدد الأطقم ما ينضغطون ولا يتغطون؛ إذا كثرت الألوان القائمة تحتهم تنسحب. */}
+      <View style={[styles.info, !row && styles.infoFixed]}>
         {targeted ? <TargetArrow /> : null}
         <View style={styles.nameRow}>
           <Avatar avatar={seatAvatar(seat, naming)} size={28} />
-          <Text style={styles.name}>{seatName(seat, naming)}</Text>
+          <Text style={styles.name} numberOfLines={1}>
+            {seatName(seat, naming)}
+          </Text>
         </View>
         <Text style={styles.small}>
           {S.inHand(player.hand.length)} · {S.bank(bankTotal(player))}
@@ -134,10 +137,17 @@ function OpponentPanel({
           {S.setsShort(completeColors(player.properties).length)}
         </Text>
       </View>
-      <View style={styles.info}>
-        <StatusBadges game={game} seat={seat} />
-        <SetChips player={player} />
-      </View>
+      {row ? (
+        <View style={styles.info}>
+          <StatusBadges game={game} seat={seat} />
+          <SetChips player={player} />
+        </View>
+      ) : (
+        <ScrollView style={styles.flex} contentContainerStyle={styles.mineContent}>
+          <StatusBadges game={game} seat={seat} />
+          <SetChips player={player} />
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -319,13 +329,14 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastAttac
         >
           <ScrollView contentContainerStyle={styles.mineContent}>
             {targets.includes(mySeat) ? <TargetArrow /> : null}
-            <View style={styles.between}>
-              <View style={styles.nameRow}>
-                <Avatar avatar={seatAvatar(mySeat, naming)} size={28} />
-                <Text style={styles.name}>{S.you}</Text>
-              </View>
-              <Text style={styles.sets}>{S.completeSets(completeColors(me.properties).length, game.winTarget)}</Text>
+            <View style={styles.nameRow}>
+              <Avatar avatar={seatAvatar(mySeat, naming)} size={28} />
+              <Text style={styles.name}>{S.you}</Text>
             </View>
+            {/* بسطر لحاله عشان ما ينقص: "الأطقم الكاملة 0 من 6" */}
+            <Text testID="my-sets" style={styles.sets}>
+              {S.completeSets(completeColors(me.properties).length, game.winTarget)}
+            </Text>
             <StatusBadges game={game} seat={mySeat} />
             <Text style={styles.small}>{S.myBank(bankTotal(me))}</Text>
             <SetChips player={me} />
@@ -506,6 +517,9 @@ const styles = StyleSheet.create({
   info: {
     gap: 3,
     flexShrink: 1,
+  },
+  infoFixed: {
+    flexShrink: 0,
   },
   status: {
     justifyContent: 'center',
