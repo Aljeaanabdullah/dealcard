@@ -24,7 +24,7 @@ import { applyEffect, CHOICE_ACTIONS, effectOptions, SWAP_ACTIONS } from './effe
 import { isValidPayment, rentFor, rentForAllCompleteSets, suggestPayment } from './payment';
 import { done, fail, type MoveError, type MoveResult } from './result';
 import { createRng, nextSeed, randomInt } from './rng';
-import { completeColors, isSetComplete } from './sets';
+import { completeColors, hasRealProperty, isSetComplete } from './sets';
 import type {
   Effect,
   EffectParams,
@@ -329,6 +329,8 @@ function playJoker(state: GameState, seat: number, cardId: string, color: ColorI
   const card = player.hand.find((c) => c.id === cardId);
   if (!card) return fail('cardNotInHand');
   if (card.kind !== 'joker') return fail('wrongCardKind');
+  // الجيكر ينحط فقط على لون عند اللاعب منه عقار حقيقي.
+  if (!hasRealProperty(player.properties, color)) return fail('jokerNeedsProperty');
 
   const next = withPlayer(countPlay(state), {
     ...player,
@@ -346,6 +348,7 @@ function moveJoker(state: GameState, seat: number, cardId: string, color: ColorI
   const placed = player.properties.find((p) => p.card.id === cardId && p.card.kind === 'joker');
   if (!placed) return fail('jokerNotOnTable');
   if (placed.color === color) return fail('sameColor');
+  if (!hasRealProperty(player.properties, color)) return fail('jokerNeedsProperty');
 
   const moved = detachBrokenBuildings({
     ...player,
@@ -889,8 +892,11 @@ export function legalMoves(state: GameState): Move[] {
       } else if (card.kind === 'money') {
         moves.push({ type: 'bankMoney', seat, cardId: card.id });
       } else if (card.kind === 'joker') {
+        // الخيارات = ألوان عقاراتي الحقيقية فقط. بدون عقارات الجيكر يبقى باليد.
         for (const color of COLORS) {
-          moves.push({ type: 'playJoker', seat, cardId: card.id, color: color.id });
+          if (hasRealProperty(player.properties, color.id)) {
+            moves.push({ type: 'playJoker', seat, cardId: card.id, color: color.id });
+          }
         }
       } else if (card.kind === 'building') {
         // جنب البنك بدون طقم، أو على أي طقم كامل.
@@ -930,7 +936,7 @@ export function legalMoves(state: GameState): Move[] {
     for (const placed of player.properties) {
       if (placed.card.kind !== 'joker') continue;
       for (const color of COLORS) {
-        if (color.id !== placed.color) {
+        if (color.id !== placed.color && hasRealProperty(player.properties, color.id)) {
           moves.push({ type: 'moveJoker', seat, cardId: placed.card.id, color: color.id });
         }
       }

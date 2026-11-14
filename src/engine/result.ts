@@ -11,6 +11,7 @@ export type MoveError =
   | 'cardNotInHand'
   | 'wrongCardKind'
   | 'jokerNotOnTable'
+  | 'jokerNeedsProperty'
   | 'sameColor'
   | 'paymentPending'
   | 'noPaymentDue'

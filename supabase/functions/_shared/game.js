@@ -122,11 +122,14 @@ var MATCH_WAIT_SECONDS = 30;
 // src/engine/sets.ts
 function isSetComplete(properties, color) {
   const inColor = properties.filter((p) => p.color === color);
-  const hasRealProperty = inColor.some((p) => p.card.kind === "property");
-  return hasRealProperty && inColor.length >= getColor(color).setSize;
+  const hasReal = inColor.some((p) => p.card.kind === "property");
+  return hasReal && inColor.length >= getColor(color).setSize;
 }
 function completeColors(properties) {
   return COLORS.map((color) => color.id).filter((id) => isSetComplete(properties, id));
+}
+function hasRealProperty(properties, color) {
+  return properties.some((p) => p.color === color && p.card.kind === "property");
 }
 
 // src/engine/payment.ts
@@ -683,6 +686,7 @@ function playJoker(state, seat, cardId, color) {
   const card = player.hand.find((c) => c.id === cardId);
   if (!card) return fail("cardNotInHand");
   if (card.kind !== "joker") return fail("wrongCardKind");
+  if (!hasRealProperty(player.properties, color)) return fail("jokerNeedsProperty");
   const next = withPlayer(countPlay(state), {
     ...player,
     hand: player.hand.filter((c) => c.id !== cardId),
@@ -697,6 +701,7 @@ function moveJoker(state, seat, cardId, color) {
   const placed = player.properties.find((p) => p.card.id === cardId && p.card.kind === "joker");
   if (!placed) return fail("jokerNotOnTable");
   if (placed.color === color) return fail("sameColor");
+  if (!hasRealProperty(player.properties, color)) return fail("jokerNeedsProperty");
   const moved = detachBrokenBuildings({
     ...player,
     properties: player.properties.map((p) => p.card.id === cardId ? { card: p.card, color } : p)
@@ -1133,7 +1138,9 @@ function legalMoves(state) {
         moves.push({ type: "bankMoney", seat, cardId: card.id });
       } else if (card.kind === "joker") {
         for (const color of COLORS) {
-          moves.push({ type: "playJoker", seat, cardId: card.id, color: color.id });
+          if (hasRealProperty(player.properties, color.id)) {
+            moves.push({ type: "playJoker", seat, cardId: card.id, color: color.id });
+          }
         }
       } else if (card.kind === "building") {
         moves.push({ type: "playBuilding", seat, cardId: card.id });
@@ -1169,7 +1176,7 @@ function legalMoves(state) {
     for (const placed of player.properties) {
       if (placed.card.kind !== "joker") continue;
       for (const color of COLORS) {
-        if (color.id !== placed.color) {
+        if (color.id !== placed.color && hasRealProperty(player.properties, color.id)) {
           moves.push({ type: "moveJoker", seat, cardId: placed.card.id, color: color.id });
         }
       }

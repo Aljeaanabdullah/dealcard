@@ -14,11 +14,16 @@ export function countInColor(properties: readonly PlacedProperty[], color: Color
  */
 export function isSetComplete(properties: readonly PlacedProperty[], color: ColorId): boolean {
   const inColor = properties.filter((p) => p.color === color);
-  const hasRealProperty = inColor.some((p) => p.card.kind === 'property');
-  return hasRealProperty && inColor.length >= getColor(color).setSize;
+  const hasReal = inColor.some((p) => p.card.kind === 'property');
+  return hasReal && inColor.length >= getColor(color).setSize;
 }
 
 /** الألوان اللي طقمها كامل. كل لون ينحسب مرة وحدة فقط. */
 export function completeColors(properties: readonly PlacedProperty[]): ColorId[] {
   return COLORS.map((color) => color.id).filter((id) => isSetComplete(properties, id));
+}
+
+/** اللاعب عنده عقار حقيقي (مو جيكر) بهذا اللون. الجيكر ما ينحط إلا على لون فيه عقار حقيقي. */
+export function hasRealProperty(properties: readonly PlacedProperty[], color: ColorId): boolean {
+  return properties.some((p) => p.color === color && p.card.kind === 'property');
 }

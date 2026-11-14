@@ -217,10 +217,56 @@ describe('الأطقم والجيكر', () => {
   });
 
   it('الجيكرات لحالها ما تكوّن طقم كامل: لازم عقار حقيقي', () => {
-    let state = ready(['joker:1', 'joker:2']);
-    state = must(applyMove(state, { type: 'playJoker', seat: ME, cardId: 'joker:1', color: 'brown' }));
-    state = must(applyMove(state, { type: 'playJoker', seat: ME, cardId: 'joker:2', color: 'brown' }));
+    // جيكرين بقوا لحالهم بلون (مثلاً بعد ما انسرق العقار اللي معهم)
+    let state = ready([]);
+    state = place(state, 'joker:1', { zone: 'properties', seat: ME, color: 'brown' });
+    state = place(state, 'joker:2', { zone: 'properties', seat: ME, color: 'brown' });
     expect(completeColors(state.players[ME]?.properties ?? [])).toEqual([]);
+  });
+
+  it('الجيكر ينحط فقط على لون عندي منه عقار حقيقي: الخيارات ألوان أراضيّ بس', () => {
+    let state = ready(['joker:1']);
+    state = place(state, 'property:brown:1', { zone: 'properties', seat: ME, color: 'brown' });
+    state = place(state, 'property:red:1', { zone: 'properties', seat: ME, color: 'red' });
+    // عقار عند لاعب ثاني ما يفتح لي لونه
+    state = place(state, 'property:green:1', { zone: 'properties', seat: 1, color: 'green' });
+
+    const options = legalMoves(state).filter((m) => m.type === 'playJoker');
+    expect(options.map((m) => (m.type === 'playJoker' ? m.color : '')).sort()).toEqual(['brown', 'red']);
+
+    expect(errorOf(applyMove(state, { type: 'playJoker', seat: ME, cardId: 'joker:1', color: 'green' }))).toBe(
+      'jokerNeedsProperty',
+    );
+    state = must(applyMove(state, { type: 'playJoker', seat: ME, cardId: 'joker:1', color: 'red' }));
+    expect(state.players[ME]?.properties.find((p) => p.card.id === 'joker:1')?.color).toBe('red');
+    expect132(state);
+  });
+
+  it('بدون ولا عقار حقيقي على الطاولة: الجيكر يبقى باليد وما له حركة', () => {
+    let state = ready(['joker:1']);
+    expect(legalMoves(state).filter((m) => m.type === 'playJoker')).toEqual([]);
+    expect(errorOf(applyMove(state, { type: 'playJoker', seat: ME, cardId: 'joker:1', color: 'brown' }))).toBe(
+      'jokerNeedsProperty',
+    );
+    // جيكر على الطاولة لحاله ما يفتح اللون لجيكر ثاني
+    state = place(ready(['joker:2']), 'joker:1', { zone: 'properties', seat: ME, color: 'brown' });
+    expect(legalMoves(state).filter((m) => m.type === 'playJoker')).toEqual([]);
+    expect(errorOf(applyMove(state, { type: 'playJoker', seat: ME, cardId: 'joker:2', color: 'brown' }))).toBe(
+      'jokerNeedsProperty',
+    );
+  });
+
+  it('نقل الجيكر: فقط إلى لون عندي منه عقار حقيقي', () => {
+    let state = ready([]);
+    state = place(state, 'property:brown:1', { zone: 'properties', seat: ME, color: 'brown' });
+    state = place(state, 'property:darkBlue:1', { zone: 'properties', seat: ME, color: 'darkBlue' });
+    state = place(state, 'joker:1', { zone: 'properties', seat: ME, color: 'brown' });
+
+    const options = legalMoves(state).filter((m) => m.type === 'moveJoker');
+    expect(options.map((m) => (m.type === 'moveJoker' ? m.color : ''))).toEqual(['darkBlue']);
+    expect(errorOf(applyMove(state, { type: 'moveJoker', seat: ME, cardId: 'joker:1', color: 'red' }))).toBe(
+      'jokerNeedsProperty',
+    );
   });
 
   it('الجيكر ينتقل من طقم لطقم بدور صاحبه، وينحسب من الـ3 كروت', () => {

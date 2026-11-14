@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **المرجع** | `prd.md` (الإصدار 1.11) |
+| **المرجع** | `prd.md` (الإصدار 1.12) |
 | **المستودع** | `git@github.com:Aljeaanabdullah/dealcard.git` |
 | **التقنية** | React Native (Expo) + TypeScript + Supabase |
 | **التاريخ** | 13 نوفمبر 2026 |
