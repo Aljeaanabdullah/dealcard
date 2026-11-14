@@ -18,7 +18,7 @@ const ME = 0;
 
 /** لعبة جديدة والدور عند المقعد 0. */
 function start(winTarget: 6 | 8 = 6): GameState {
-  return setTurn(createGame(1, winTarget), { seat: ME, hasDrawn: false, playsUsed: 0, discarding: false });
+  return setTurn(createGame(1, winTarget), { seat: ME, hasDrawn: false, playsUsed: 0 });
 }
 
 /** لعبة والمقعد 0 سحب وجاهز يلعب، ويده فيها الكروت المطلوبة فقط. */
@@ -142,32 +142,45 @@ describe('نهاية الدور', () => {
 
   it('الدور ينتقل للمقعد التالي ويرجع للأول بعد الرابع', () => {
     let state = must(applyMove(ready([]), { type: 'endTurn', seat: ME }));
-    expect(state.turn).toEqual({ seat: 1, hasDrawn: false, playsUsed: 0, discarding: false });
+    expect(state.turn).toEqual({ seat: 1, hasDrawn: false, playsUsed: 0 });
     state = setTurn(state, { seat: 3, hasDrawn: true });
     state = must(applyMove(state, { type: 'endTurn', seat: 3 }));
     expect(state.turn.seat).toBe(0);
   });
 
-  it('اليد فوق 7 ترفض إنهاء الدور لين ينرمي الزايد في النار', () => {
-    let state = ready(eight);
-    expect(errorOf(applyMove(state, { type: 'endTurn', seat: ME }))).toBe('handOverLimit');
-    state = must(applyMove(state, { type: 'discard', seat: ME, cardId: 'money:1:8' }));
+  it('اليد فوق 7: الزايد ينحرق عشوائياً في النار أول ما يخلص الدور، واللاعب ما يختار', () => {
+    const hand = [...eight, 'money:2:1', 'money:2:2'];
+    const before = ready(hand);
+    // ما فيه حركة رمي، وإنهاء الدور متاح حتى واليد فوق 7
+    const mine = legalMoves(before).filter((m) => m.seat === ME);
+    expect(mine.map((m) => m.type)).toContain('endTurn');
+    expect(mine.map((m) => m.type as string)).not.toContain('discard');
+
+    const state = must(applyMove(before, { type: 'endTurn', seat: ME }));
     expect(handSize(state)).toBe(7);
-    expect(state.firePile.map((c) => c.id)).toEqual(['money:1:8']);
-    state = must(applyMove(state, { type: 'endTurn', seat: ME }));
+    expect(state.firePile).toHaveLength(3);
+    expect(state.firePile.every((c) => hand.includes(c.id))).toBe(true);
     expect(state.turn.seat).toBe(1);
     expect132(state);
   });
 
-  it('ما يرمي إذا يده 7 أو أقل', () => {
-    const state = ready(eight.slice(0, 7));
-    expect(errorOf(applyMove(state, { type: 'discard', seat: ME, cardId: 'money:1:1' }))).toBe('handNotOverLimit');
+  it('حرق الزايد عشوائي مبذور: نفس الحالة تعطي نفس النتيجة، وبذرة ثانية تعطي غيرها', () => {
+    const before = ready([...eight, 'money:2:1', 'money:2:2', 'money:2:3', 'money:2:4']);
+    const first = must(applyMove(before, { type: 'endTurn', seat: ME }));
+    expect(must(applyMove(before, { type: 'endTurn', seat: ME }))).toEqual(first);
+
+    const burned = new Set<string>();
+    for (let seed = 1; seed <= 20; seed++) {
+      const state = must(applyMove({ ...before, seed }, { type: 'endTurn', seat: ME }));
+      burned.add(state.firePile.map((c) => c.id).sort().join());
+    }
+    expect(burned.size).toBeGreaterThan(1);
   });
 
-  it('بعد ما يبدأ يرمي ما يلعب كروت', () => {
-    let state = ready([...eight, 'money:2:1']);
-    state = must(applyMove(state, { type: 'discard', seat: ME, cardId: 'money:1:8' }));
-    expect(errorOf(applyMove(state, { type: 'bankMoney', seat: ME, cardId: 'money:2:1' }))).toBe('discarding');
+  it('يده 7 أو أقل: ما ينحرق شي', () => {
+    const state = must(applyMove(ready(eight.slice(0, 7)), { type: 'endTurn', seat: ME }));
+    expect(handSize(state)).toBe(7);
+    expect(state.firePile).toHaveLength(0);
   });
 });
 
@@ -372,7 +385,6 @@ describe('مباراة كاملة', () => {
 
       if (seat === ME) {
         const properties = state.players[ME]?.properties ?? [];
-        const hand = state.players[ME]?.hand ?? [];
         const useful = moves.filter(
           (m) =>
             m.type === 'playProperty' ||
@@ -380,15 +392,12 @@ describe('مباراة كاملة', () => {
               properties.some((p) => p.color === m.color && p.card.kind === 'property') &&
               !isSetComplete(properties, m.color)),
         );
-        const junk = moves.filter(
-          (m) => m.type === 'discard' && hand.find((c) => c.id === m.cardId)?.kind !== 'property',
-        );
-        const rest = moves.filter((m) => m.type === 'draw' || m.type === 'endTurn' || m.type === 'discard');
-        options = useful.length > 0 ? useful : junk.length > 0 ? junk : rest;
+        const rest = moves.filter((m) => m.type === 'draw' || m.type === 'endTurn');
+        options = useful.length > 0 ? useful : rest;
       } else {
-        // الباقين يسحبون ويحطون فلوس ويرمون فقط (بدون عقارات ولا أكشن).
+        // الباقين يسحبون ويحطون فلوس فقط (بدون عقارات ولا أكشن).
         options = moves.filter(
-          (m) => m.type === 'draw' || m.type === 'bankMoney' || m.type === 'discard' || m.type === 'endTurn',
+          (m) => m.type === 'draw' || m.type === 'bankMoney' || m.type === 'endTurn',
         );
       }
 

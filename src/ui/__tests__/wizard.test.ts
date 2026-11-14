@@ -54,22 +54,17 @@ describe('الحرق بالنار خيار واحد', () => {
   it('يدي فوق 7 وباقي لي كروت ألعبها: كرت الأكشن له "العبه" و"احرقه بالنار" مرة وحدة بس', () => {
     const game = place(readyState(eight), 'money:5:1', { zone: 'bank', seat: 1 });
     const mine = legalMoves(game).filter((move) => move.seat === ME);
-    // المحرك يعطي حركتين بنفس المعنى: حرق ورمي
-    expect(mine.filter((m) => 'cardId' in m && m.cardId === 'action:qarqash:1').map((m) => m.type)).toEqual(
-      expect.arrayContaining(['burnAction', 'discard']),
-    );
     const shown = labels(step(cardMoves(mine, 'action:qarqash:1'), [], game));
     expect(shown).toEqual([S.playIt, S.burn]);
-    expect(shown.filter((label) => label === S.burn)).toHaveLength(1);
   });
 
-  it('خلصت كروت دوري ويدي فوق 7: يبقى خيار واحد "احرقه بالنار"', () => {
+  it('خلصت كروت دوري ويدي فوق 7: ما فيه رمي باليد، الزايد ينحرق عشوائياً بنهاية الدور', () => {
     const base = readyState(eight);
     const game = { ...base, turn: { ...base.turn, playsUsed: 3 } };
     const mine = legalMoves(game).filter((move) => move.seat === ME);
-    expect(labels(step(cardMoves(mine, 'action:qarqash:1'), [], game))).toEqual([S.burn]);
-    // والفلوس (ما تنحرق بالدور) تنرمي بنفس الاسم
-    expect(labels(step(cardMoves(mine, 'money:1:1'), [], game))).toEqual([S.burn]);
+    expect(cardMoves(mine, 'action:qarqash:1')).toEqual([]);
+    expect(cardMoves(mine, 'money:1:1')).toEqual([]);
+    expect(mine).toEqual([{ type: 'endTurn', seat: ME }]);
   });
 });
 

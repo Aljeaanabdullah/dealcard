@@ -6,7 +6,6 @@ import { chooseMove } from '../bot/bot';
 import {
   MATCH_WAIT_SECONDS,
   PLAYER_COUNT,
-  RANDOM_MATCH_WIN_TARGET,
   TURN_SECONDS,
   WIN_TARGETS,
   type WinTarget,
@@ -123,11 +122,22 @@ export function joinRoom(room: Room, playerId: string, name: string): RoomResult
 
 // ---------------- اللعب العشوائي (المرحلة 9) ----------------
 
-/** غرفة لعب عشوائي جديدة: شرط الفوز ثابت، وتبدأ تلقائياً. */
-export function createMatchRoom(code: string, playerId: string, name: string, seed: number, now: number): RoomResult {
+/**
+ * غرفة لعب عشوائي جديدة: شرط الفوز يختاره اللاعب قبل البحث (6 أو 8) وما يتغير بعدها، وتبدأ تلقائياً.
+ */
+export function createMatchRoom(
+  code: string,
+  playerId: string,
+  name: string,
+  winTarget: number,
+  seed: number,
+  now: number,
+): RoomResult {
+  const target = WIN_TARGETS.find((allowed) => allowed === winTarget);
+  if (target === undefined) return fail('invalidWinTarget');
   const created = createRoom(code, playerId, name);
   if (!created.ok) return created;
-  return { ok: true, room: { ...created.room, winTarget: RANDOM_MATCH_WIN_TARGET, match: { openedAt: now, seed } } };
+  return { ok: true, room: { ...created.room, winTarget: target, match: { openedAt: now, seed } } };
 }
 
 /** لاعب يدخل غرفة لعب عشوائي مفتوحة. إذا اكتمل 4 لاعبين اللعبة تبدأ مباشرة. */
@@ -281,7 +291,7 @@ export function tick(room: Room, now: number): Room {
       const player = game.players[seat];
       move = debt && player ? { type: 'pay', seat, cardIds: suggestPayment(player, debt.amount) } : null;
     } else {
-      const ended = forceEndTurn(game, game.turn.seat, rng);
+      const ended = forceEndTurn(game, game.turn.seat);
       if (ended === game) return room;
       return withSeed({
         ...room,

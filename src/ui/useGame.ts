@@ -121,7 +121,7 @@ export function useGame(winTarget: WinTarget, seed: number): GameController {
       });
       return;
     }
-    const next = forceEndTurn(game, HUMAN_SEAT, rngRef.current);
+    const next = forceEndTurn(game, HUMAN_SEAT);
     if (next !== game) dispatch({ type: 'set', game: next, expect: game, event: S.eventTimeout });
   }, [game, myTurn, secondsLeft]);
 

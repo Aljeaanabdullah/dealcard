@@ -249,7 +249,7 @@ describe('البوتات بالغرفة', () => {
     const game = room.game;
     if (!game) throw new Error('ما فيه لعبة');
     // نخلي الدور عند بوت
-    room = { ...room, game: { ...game, turn: { seat: 1, hasDrawn: false, playsUsed: 0, discarding: false } }, lastMoveAt: 1000 };
+    room = { ...room, game: { ...game, turn: { seat: 1, hasDrawn: false, playsUsed: 0 } }, lastMoveAt: 1000 };
 
     expect(tick(room, 1000 + BOT_DELAY_MS - 1)).toBe(room);
     const after = tick(room, 1000 + BOT_DELAY_MS);
@@ -267,7 +267,7 @@ describe('البوتات بالغرفة', () => {
     // نخلي الدور عند المقعد اللي طلع صاحبه: البوت يلعب بداله
     const game = room.game;
     if (!game) throw new Error('ما فيه لعبة');
-    room = { ...room, game: { ...game, turn: { seat: 2, hasDrawn: false, playsUsed: 0, discarding: false } }, lastMoveAt: 0 };
+    room = { ...room, game: { ...game, turn: { seat: 2, hasDrawn: false, playsUsed: 0 } }, lastMoveAt: 0 };
     room = tick(room, 5000);
     expect(room.lastMove).toEqual({ type: 'draw', seat: 2 });
   });

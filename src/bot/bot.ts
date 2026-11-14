@@ -2,7 +2,7 @@
 // يستخدم نفس المحرك ويختار من الحركات القانونية فقط.
 // ما يشوف إلا يده والمعلومات المكشوفة على الطاولة (بنوك وعقارات وعدد كروت الباقين).
 
-import type { ActionId, Card } from '../data/cards';
+import type { ActionId } from '../data/cards';
 import { legalMoves, type Move, type PlayActionMove, type RespondMove } from '../engine/moves';
 import { cardValue, rentFor, totalPayable } from '../engine/payment';
 import { randomInt, type Rng } from '../engine/rng';
@@ -33,46 +33,6 @@ function isBigAttack(state: GameState, effect: Effect): boolean {
       return getPlayer(state, effect.target).hand.length >= 5;
     default:
       return effect.amount >= 5;
-  }
-}
-
-/** قيمة الاحتفاظ بالكرت باليد: الأقل ينرمي أول. */
-function keepValue(card: Card): number {
-  switch (card.kind) {
-    case 'joker':
-      return 95;
-    case 'property':
-      return 90;
-    case 'building':
-      return 50;
-    case 'rent':
-      return 45;
-    case 'money':
-      return 20 + card.value * 3;
-    case 'action':
-      switch (card.action) {
-        case 'rahatAlek':
-          return 88;
-        case 'tebWetkhayyar':
-          return 86;
-        case 'malekAmal':
-          return 85;
-        case 'hayyour':
-          return 84;
-        case 'maTshoofShar':
-        case 'edfaaliEjari':
-          return 70;
-        case 'hasanah':
-          return 65;
-        case 'fazaah':
-          return 60;
-        case 'doubleRent':
-          return 30;
-        case 'ekshef':
-          return 5;
-        default:
-          return 40;
-      }
   }
 }
 
@@ -202,11 +162,6 @@ function scoreTurnMove(state: GameState, seat: number, move: Move): number {
     }
     case 'burnAction':
       return -5;
-    case 'discard': {
-      const card = me.hand.find((c) => c.id === move.cardId);
-      // دائماً أقل من أي لعبة مفيدة، وأعلى من الحركات المرفوضة.
-      return -0.1 - (card ? keepValue(card) : 0) / 1000;
-    }
     case 'endTurn':
       return 0;
     default:
@@ -263,11 +218,11 @@ function scoreMove(state: GameState, seat: number, move: Move): number {
  * تنحسب كأن الدور بأوله، عشان ما تتأثر بعدد الكروت الملعوبة.
  */
 function deadCardIds(state: GameState, seat: number): Set<string> {
-  const fresh: GameState = { ...state, turn: { ...state.turn, playsUsed: 0, discarding: false } };
+  const fresh: GameState = { ...state, turn: { ...state.turn, playsUsed: 0 } };
   const live = new Set<string>();
   for (const move of legalMoves(fresh)) {
     if (move.seat !== seat || !('cardId' in move) || move.cardId === undefined) continue;
-    if (move.type === 'burnAction' || move.type === 'discard') continue;
+    if (move.type === 'burnAction') continue;
     if (scoreTurnMove(fresh, seat, move) > 0) {
       live.add(move.cardId);
       if (move.type === 'playRent' && move.doubleCardId !== undefined) live.add(move.doubleCardId);
@@ -285,23 +240,10 @@ function deadCardIds(state: GameState, seat: number): Set<string> {
   return dead;
 }
 
-/** تعديل التقييم عشان البوت يتخلص من الكروت الميتة وما تتعطل يده. */
+/** البوت يحرق كرت الأكشن أو الإيجار الميت إذا ما عنده لعبة أفضل، عشان ما تتعطل يده. */
 function adjustForDeadCards(state: GameState, seat: number, move: Move, score: number, dead: Set<string>): number {
   const me = getPlayer(state, seat);
-  if (move.type === 'burnAction' && dead.has(move.cardId) && me.hand.length >= 5) {
-    // يحرق كرت الأكشن أو الإيجار الميت إذا ما عنده لعبة أفضل.
-    return 1;
-  }
-  if (move.type === 'discard' && dead.has(move.cardId)) {
-    // الميت ينرمي قبل الحي، وبين الكروت الميتة ينرمي الأقل قيمة أول.
-    const card = me.hand.find((c) => c.id === move.cardId);
-    return -0.05 - (card ? keepValue(card) : 0) / 100000;
-  }
-  if (move.type === 'bankMoney' && me.hand.length > 7) {
-    // إذا يده فوق 7 وفيها إيجار ميت، يرميه بدل ما يحط فلوس.
-    const hasDeadRent = me.hand.some((c) => c.kind === 'rent' && dead.has(c.id));
-    if (hasDeadRent) return -0.2;
-  }
+  if (move.type === 'burnAction' && dead.has(move.cardId) && me.hand.length >= 5) return 1;
   return score;
 }
 

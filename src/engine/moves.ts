@@ -23,6 +23,7 @@ import {
 import { applyEffect, CHOICE_ACTIONS, effectOptions, SWAP_ACTIONS } from './effects';
 import { isValidPayment, rentFor, rentForAllCompleteSets, suggestPayment } from './payment';
 import { done, fail, type MoveError, type MoveResult } from './result';
+import { createRng, nextSeed, randomInt } from './rng';
 import { completeColors, isSetComplete } from './sets';
 import type {
   Effect,
@@ -114,7 +115,6 @@ export type Move =
   | { readonly type: 'placeBuilding'; readonly seat: number; readonly cardId: string; readonly color: ColorId }
   | RespondMove
   | { readonly type: 'pay'; readonly seat: number; readonly cardIds: readonly string[] }
-  | { readonly type: 'discard'; readonly seat: number; readonly cardId: string }
   | { readonly type: 'endTurn'; readonly seat: number };
 
 const RESPONSE_KINDS: readonly ResponseKind[] = ['malekAmal', 'hayyour', 'fazaah', 'maTshoofShar', 'edfaaliEjari'];
@@ -130,7 +130,6 @@ function countPlay(state: GameState): GameState {
 /** فحوصات مشتركة لأي لعب كرت ينحسب من كروت الدور. */
 function checkCanPlay(state: GameState): MoveError | null {
   if (!state.turn.hasDrawn) return 'mustDrawFirst';
-  if (state.turn.discarding) return 'discarding';
   if (state.turn.playsUsed >= MAX_PLAYS_PER_TURN + state.extraPlays) return 'noPlaysLeft';
   return null;
 }
@@ -654,25 +653,28 @@ function pay(state: GameState, seat: number, cardIds: readonly string[]): MoveRe
   return done(checkWin(next, pending.to));
 }
 
-function discard(state: GameState, seat: number, cardId: string): MoveResult {
-  if (!state.turn.hasDrawn) return fail('mustDrawFirst');
-
+/**
+ * يحرق الزايد عن 7 من يد اللاعب عشوائياً (عشوائية مبذورة من بذرة الحالة).
+ * اللاعب ما يختار: الزايد ينحرق أول ما يخلص دوره.
+ */
+function burnExcess(state: GameState, seat: number): GameState {
   const player = getPlayer(state, seat);
-  if (player.hand.length <= MAX_HAND_SIZE) return fail('handNotOverLimit');
-  const card = player.hand.find((c) => c.id === cardId);
-  if (!card) return fail('cardNotInHand');
+  if (player.hand.length <= MAX_HAND_SIZE) return state;
 
-  return done(
-    withPlayer(
-      { ...state, firePile: [...state.firePile, card], turn: { ...state.turn, discarding: true } },
-      { ...player, hand: player.hand.filter((c) => c.id !== cardId) },
-    ),
-  );
+  const rng = createRng(state.seed);
+  const hand = player.hand.slice();
+  const burned: Card[] = [];
+  while (hand.length > MAX_HAND_SIZE) {
+    const [card] = hand.splice(randomInt(rng, hand.length), 1);
+    if (!card) break;
+    burned.push(card);
+  }
+  return withPlayer({ ...state, firePile: [...state.firePile, ...burned], seed: nextSeed(rng) }, { ...player, hand });
 }
 
-function endTurn(state: GameState, seat: number): MoveResult {
-  if (!state.turn.hasDrawn) return fail('mustDrawFirst');
-  if (getPlayer(state, seat).hand.length > MAX_HAND_SIZE) return fail('handOverLimit');
+function endTurn(before: GameState, seat: number): MoveResult {
+  if (!before.turn.hasDrawn) return fail('mustDrawFirst');
+  const state = burnExcess(before, seat);
 
   // اللاعب اللي عليه "استريح" دوره يتفوّت: ما يسحب ولا يلعب.
   let nextSeat = (seat + 1) % PLAYER_COUNT;
@@ -696,7 +698,7 @@ function endTurn(state: GameState, seat: number): MoveResult {
     immune,
     extraPlays: 0,
     revealed: null,
-    turn: { seat: nextSeat, hasDrawn: false, playsUsed: 0, discarding: false },
+    turn: { seat: nextSeat, hasDrawn: false, playsUsed: 0 },
   });
 }
 
@@ -732,8 +734,6 @@ export function applyMove(state: GameState, move: Move): MoveResult {
       return playBuilding(state, move.seat, move.cardId, move.color);
     case 'placeBuilding':
       return placeBuilding(state, move.seat, move.cardId, move.color);
-    case 'discard':
-      return discard(state, move.seat, move.cardId);
     case 'endTurn':
       return endTurn(state, move.seat);
   }
@@ -945,13 +945,8 @@ export function legalMoves(state: GameState): Move[] {
     }
   }
 
-  if (player.hand.length > MAX_HAND_SIZE) {
-    for (const card of player.hand) {
-      moves.push({ type: 'discard', seat, cardId: card.id });
-    }
-  } else {
-    moves.push({ type: 'endTurn', seat });
-  }
+  // إنهاء الدور متاح دائماً بعد السحب: الزايد عن 7 ينحرق عشوائياً.
+  moves.push({ type: 'endTurn', seat });
 
   return moves;
 }

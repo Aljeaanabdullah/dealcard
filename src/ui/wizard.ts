@@ -170,8 +170,6 @@ function typeOption(value: string): Option {
       return { value, label: S.askRent };
     case 'burnAction':
       return { value, label: S.burn };
-    case 'discard':
-      return { value, label: S.discard };
     default:
       return { value, label: S.playIt };
   }
@@ -271,18 +269,13 @@ export function nextStep(
   return null;
 }
 
-/**
- * حركاتي اللي تخص كرت معيّن (باليد أو على الطاولة).
- * إذا الكرت ينحرق (أكشن أو إيجار) ويدي فوق 7، يطلع خيار واحد "احرقه بالنار" بدل خيارين بنفس المعنى.
- */
+/** حركاتي اللي تخص كرت معيّن (باليد أو على الطاولة). */
 export function cardMoves(myMoves: readonly Move[], cardId: string): Move[] {
-  const moves = myMoves.filter(
+  return myMoves.filter(
     (move) =>
       move.type !== 'respond' &&
       (('cardId' in move && move.cardId === cardId) || (move.type === 'playRent' && move.doubleCardId === cardId)),
   );
-  const canBurn = moves.some((move) => move.type === 'burnAction');
-  return canBurn ? moves.filter((move) => move.type !== 'discard') : moves;
 }
 
 /** نص تأثير الكرت الملعوب (يطلع تحت الكرت بالنافذة). */

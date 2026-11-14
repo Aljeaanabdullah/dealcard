@@ -10,7 +10,7 @@ const rng = () => createRng(5);
 
 describe('أولويات البوت', () => {
   it('يسحب أول شي', () => {
-    const state = { ...readyState([]), turn: { seat: ME, hasDrawn: false, playsUsed: 0, discarding: false } };
+    const state = { ...readyState([]), turn: { seat: ME, hasDrawn: false, playsUsed: 0 } };
     expect(chooseMove(state, ME, rng())).toEqual({ type: 'draw', seat: ME });
   });
 
@@ -52,7 +52,7 @@ describe('أولويات البوت', () => {
     });
   });
 
-  it('يرمي الزايد تلقائياً ويحتفظ بالعقارات وكروت الرد', () => {
+  it('خلص كروت دوره ويده فوق 7: ينهي الدور (الزايد ينحرق عشوائياً، ما فيه حركة رمي)', () => {
     const hand = [
       'property:red:1',
       'joker:1',
@@ -63,8 +63,8 @@ describe('أولويات البوت', () => {
       'property:green:1',
       'action:tebWetkhayyar:1',
     ];
-    const state = { ...readyState(hand), turn: { seat: ME, hasDrawn: true, playsUsed: 3, discarding: false } };
-    expect(chooseMove(state, ME, rng())).toEqual({ type: 'discard', seat: ME, cardId: 'action:ekshef:1' });
+    const state = { ...readyState(hand), turn: { seat: ME, hasDrawn: true, playsUsed: 3 } };
+    expect(chooseMove(state, ME, rng())).toEqual({ type: 'endTurn', seat: ME });
   });
 
   it('ما له حركة إذا مو دوره وما عليه رد ولا دفع', () => {
@@ -160,7 +160,9 @@ describe('4 بوتات يلعبون 500 مباراة', () => {
       );
       // شرط 8 أطقم (8 ألوان من 10) يطوّل المباراة بطبيعته، فحدّه أوسع.
       expect(groupMedian).toBeLessThan(target === 6 ? 1000 : 2500);
-      if (target === 6) expect(groupLong).toBe(0);
+      // بشرط 6 أطقم ما فيه مباراة توصل 4000 حركة. (الحد كان 3000 قبل ما يصير حرق الزايد عشوائي بالإصدار 1.9؛
+      // انرفع بموافقة صاحب المشروع لأن مباراة وحدة من 250 وصلت 3121.)
+      if (target === 6) expect(group[group.length - 1] ?? 0).toBeLessThan(4000);
     }
 
     expect(lengths).toHaveLength(500);

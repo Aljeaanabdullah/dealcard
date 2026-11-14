@@ -27,22 +27,30 @@ export default function App({ transport }: AppProps) {
   // الاسم المستعار ينكتب مرة وحدة ويبقى طول ما التطبيق مفتوح.
   const [name, setName] = useState('');
   const goHome = () => setScreen({ kind: 'home' });
+  // بذرة الخلط تجي من الواجهة (الوقت الحالي)؛ المحرك نفسه ما يستخدم وقت النظام.
+  const playBots = (winTarget: WinTarget) => setScreen({ kind: 'bots', winTarget, seed: Date.now() % 2147483647 });
+  const enterRoom = (snapshot: RoomSnapshot) => setScreen({ kind: 'online', snapshot });
 
   return (
     <SafeAreaProvider>
       <StatusBar hidden />
       {screen.kind === 'bots' ? (
-        <GameScreen key={screen.seed} winTarget={screen.winTarget} seed={screen.seed} onPlayAgain={goHome} />
+        <GameScreen
+          key={screen.seed}
+          winTarget={screen.winTarget}
+          seed={screen.seed}
+          onPlayAgain={() => playBots(screen.winTarget)}
+          onExit={goHome}
+        />
       ) : screen.kind === 'online' && net ? (
-        <OnlineGame key={screen.snapshot.code} transport={net} initial={screen.snapshot} onExit={goHome} />
+        <OnlineGame key={screen.snapshot.code} transport={net} initial={screen.snapshot} onExit={goHome} onEnterRoom={enterRoom} />
       ) : (
         <HomeScreen
           transport={net}
           name={name}
           onNameChange={setName}
-          // بذرة الخلط تجي من الواجهة (الوقت الحالي)؛ المحرك نفسه ما يستخدم وقت النظام.
-          onPlayBots={(winTarget) => setScreen({ kind: 'bots', winTarget, seed: Date.now() % 2147483647 })}
-          onEnterRoom={(snapshot) => setScreen({ kind: 'online', snapshot })}
+          onPlayBots={playBots}
+          onEnterRoom={enterRoom}
         />
       )}
     </SafeAreaProvider>

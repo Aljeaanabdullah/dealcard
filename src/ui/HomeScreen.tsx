@@ -21,7 +21,7 @@ interface HomeScreenProps {
   readonly onEnterRoom: (snapshot: RoomSnapshot) => void;
 }
 
-type Dialog = 'name' | 'bots' | 'join' | null;
+type Dialog = 'name' | 'bots' | 'join' | 'random' | null;
 
 export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterRoom }: HomeScreenProps) {
   // الاسم ينكتب مرة وحدة أول ما ينفتح التطبيق.
@@ -57,14 +57,11 @@ export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterR
     enter(transport.createRoom(name));
   };
 
-  /** لعب عشوائي: يدخل طابور المطابقة. */
+  /** لعب عشوائي: اللاعب يختار شرط الفوز (6 أو 8) ثم يدخل طابور المطابقة. */
   const joinRandom = () => {
     if (!transport) return;
-    if (name.trim() === '') {
-      setDialog('name');
-      return;
-    }
-    enter(transport.joinRandom(name));
+    setDialog(null);
+    enter(transport.joinRandom(name, winTarget));
   };
 
   const joinRoom = () => {
@@ -97,7 +94,7 @@ export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterR
           accessibilityState={{ disabled: !online }}
           disabled={!online}
           style={[styles.card, styles.cardGold, !online && styles.disabled]}
-          onPress={joinRandom}
+          onPress={() => setDialog(name.trim() === '' ? 'name' : 'random')}
         >
           <View style={[styles.mark, styles.markDark]} />
           <View>
@@ -195,6 +192,30 @@ export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterR
                     ))}
                   </View>
                   <Pressable testID="start-go" accessibilityRole="button" style={styles.primary} onPress={() => onPlayBots(winTarget)}>
+                    <Text style={styles.primaryText}>{S.start}</Text>
+                  </Pressable>
+                </>
+              ) : null}
+
+              {dialog === 'random' ? (
+                <>
+                  <Text style={styles.sheetTitle}>{S.randomPlay}</Text>
+                  <Text style={styles.small}>{S.winCondition}</Text>
+                  <View style={styles.row}>
+                    {WIN_TARGETS.map((target) => (
+                      <Pressable
+                        key={target}
+                        testID={`random-${target}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: winTarget === target }}
+                        style={[styles.choice, winTarget === target && styles.choiceOn]}
+                        onPress={() => setWinTarget(target)}
+                      >
+                        <Text style={[styles.choiceText, winTarget === target && styles.dark]}>{S.sets(target)}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Pressable testID="random-go" accessibilityRole="button" style={styles.primary} onPress={joinRandom}>
                     <Text style={styles.primaryText}>{S.start}</Text>
                   </Pressable>
                 </>

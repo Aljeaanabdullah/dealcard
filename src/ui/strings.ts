@@ -21,7 +21,7 @@ export const S = {
 
   // اللعب العشوائي
   searching: 'جاري البحث عن لاعبين',
-  searchingHint: 'شرط الفوز: 6 أطقم مختلفة',
+  searchingHint: (n: number) => `شرط الفوز: ${n} أطقم مختلفة`,
   botsIn: (seconds: number) => `البوتات تكمل العدد بعد ${seconds} ثانية`,
   cancelSearch: 'إلغاء',
 
@@ -79,7 +79,6 @@ export const S = {
   looseBuilding: 'بدون طقم',
   draw: 'اسحب',
   endTurn: 'إنهاء الدور',
-  discardFirst: 'ارم الزايد',
   waiting: 'انتظر...',
   revealedHand: (name: string) => `يد ${name}:`,
   tapCard: 'اضغط كرت عشان تلعبه',
@@ -211,9 +210,7 @@ export const S = {
   handCard: (n: number) => `الكرت رقم ${n} باليد`,
   inColor: (color: string) => `بلون ${color}`,
   amount: (n: number) => `${n} دينار`,
-  // خيار واحد بنفس الاسم: الكرت يروح للنار، سواء حرق بالدور أو رمي الزايد.
   burn: 'احرقه بالنار',
-  discard: 'احرقه بالنار',
   respondWith: (card: string) => `رد بـ ${card}`,
   payer: (name: string) => `يدفع عني: ${name}`,
   cancelOnly: 'يلغي فقط',
@@ -235,4 +232,10 @@ export const S = {
   setsColumn: 'الأطقم الكاملة',
   bankColumn: 'البنك',
   playAgain: 'إعادة اللعب',
+  exitHome: 'خروج للبداية',
+  // الخروج من داخل اللعب
+  exitGame: 'خروج',
+  exitConfirm: 'تبي تطلع من اللعبة وترجع للبداية؟',
+  exitYes: 'إيه، اطلع',
+  exitStay: 'كمّل اللعب',
 } as const;

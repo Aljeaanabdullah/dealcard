@@ -118,7 +118,6 @@ var MAX_HAND_SIZE = 7;
 var WIN_TARGETS = [6, 8];
 var TURN_SECONDS = 90;
 var MATCH_WAIT_SECONDS = 30;
-var RANDOM_MATCH_WIN_TARGET = 6;
 
 // src/engine/sets.ts
 function isSetComplete(properties, color) {
@@ -539,7 +538,6 @@ function countPlay(state) {
 }
 function checkCanPlay(state) {
   if (!state.turn.hasDrawn) return "mustDrawFirst";
-  if (state.turn.discarding) return "discarding";
   if (state.turn.playsUsed >= MAX_PLAYS_PER_TURN + state.extraPlays) return "noPlaysLeft";
   return null;
 }
@@ -946,22 +944,22 @@ function pay(state, seat, cardIds) {
   const next = withPlayer(withPlayer({ ...state, pending: nextPending, pendingQueue }, paid), received);
   return done(checkWin(next, pending.to));
 }
-function discard(state, seat, cardId) {
-  if (!state.turn.hasDrawn) return fail("mustDrawFirst");
+function burnExcess(state, seat) {
   const player = getPlayer(state, seat);
-  if (player.hand.length <= MAX_HAND_SIZE) return fail("handNotOverLimit");
-  const card = player.hand.find((c) => c.id === cardId);
-  if (!card) return fail("cardNotInHand");
-  return done(
-    withPlayer(
-      { ...state, firePile: [...state.firePile, card], turn: { ...state.turn, discarding: true } },
-      { ...player, hand: player.hand.filter((c) => c.id !== cardId) }
-    )
-  );
+  if (player.hand.length <= MAX_HAND_SIZE) return state;
+  const rng = createRng(state.seed);
+  const hand = player.hand.slice();
+  const burned = [];
+  while (hand.length > MAX_HAND_SIZE) {
+    const [card] = hand.splice(randomInt(rng, hand.length), 1);
+    if (!card) break;
+    burned.push(card);
+  }
+  return withPlayer({ ...state, firePile: [...state.firePile, ...burned], seed: nextSeed(rng) }, { ...player, hand });
 }
-function endTurn(state, seat) {
-  if (!state.turn.hasDrawn) return fail("mustDrawFirst");
-  if (getPlayer(state, seat).hand.length > MAX_HAND_SIZE) return fail("handOverLimit");
+function endTurn(before, seat) {
+  if (!before.turn.hasDrawn) return fail("mustDrawFirst");
+  const state = burnExcess(before, seat);
   let nextSeat = (seat + 1) % PLAYER_COUNT;
   let skips = state.skips;
   let immune = state.immune;
@@ -980,7 +978,7 @@ function endTurn(state, seat) {
     immune,
     extraPlays: 0,
     revealed: null,
-    turn: { seat: nextSeat, hasDrawn: false, playsUsed: 0, discarding: false }
+    turn: { seat: nextSeat, hasDrawn: false, playsUsed: 0 }
   });
 }
 function applyMove(state, move) {
@@ -1011,8 +1009,6 @@ function applyMove(state, move) {
       return playBuilding(state, move.seat, move.cardId, move.color);
     case "placeBuilding":
       return placeBuilding(state, move.seat, move.cardId, move.color);
-    case "discard":
-      return discard(state, move.seat, move.cardId);
     case "endTurn":
       return endTurn(state, move.seat);
   }
@@ -1186,13 +1182,7 @@ function legalMoves(state) {
       }
     }
   }
-  if (player.hand.length > MAX_HAND_SIZE) {
-    for (const card of player.hand) {
-      moves.push({ type: "discard", seat, cardId: card.id });
-    }
-  } else {
-    moves.push({ type: "endTurn", seat });
-  }
+  moves.push({ type: "endTurn", seat });
   return moves;
 }
 
@@ -1218,44 +1208,6 @@ function isBigAttack(state, effect) {
       return getPlayer2(state, effect.target).hand.length >= 5;
     default:
       return effect.amount >= 5;
-  }
-}
-function keepValue(card) {
-  switch (card.kind) {
-    case "joker":
-      return 95;
-    case "property":
-      return 90;
-    case "building":
-      return 50;
-    case "rent":
-      return 45;
-    case "money":
-      return 20 + card.value * 3;
-    case "action":
-      switch (card.action) {
-        case "rahatAlek":
-          return 88;
-        case "tebWetkhayyar":
-          return 86;
-        case "malekAmal":
-          return 85;
-        case "hayyour":
-          return 84;
-        case "maTshoofShar":
-        case "edfaaliEjari":
-          return 70;
-        case "hasanah":
-          return 65;
-        case "fazaah":
-          return 60;
-        case "doubleRent":
-          return 30;
-        case "ekshef":
-          return 5;
-        default:
-          return 40;
-      }
   }
 }
 function scoreAction(state, seat, move, action) {
@@ -1368,10 +1320,6 @@ function scoreTurnMove(state, seat, move) {
     }
     case "burnAction":
       return -5;
-    case "discard": {
-      const card = me.hand.find((c) => c.id === move.cardId);
-      return -0.1 - (card ? keepValue(card) : 0) / 1e3;
-    }
     case "endTurn":
       return 0;
     default:
@@ -1414,11 +1362,11 @@ function scoreMove(state, seat, move) {
   return scoreTurnMove(state, seat, move);
 }
 function deadCardIds(state, seat) {
-  const fresh = { ...state, turn: { ...state.turn, playsUsed: 0, discarding: false } };
+  const fresh = { ...state, turn: { ...state.turn, playsUsed: 0 } };
   const live = /* @__PURE__ */ new Set();
   for (const move of legalMoves(fresh)) {
     if (move.seat !== seat || !("cardId" in move) || move.cardId === void 0) continue;
-    if (move.type === "burnAction" || move.type === "discard") continue;
+    if (move.type === "burnAction") continue;
     if (scoreTurnMove(fresh, seat, move) > 0) {
       live.add(move.cardId);
       if (move.type === "playRent" && move.doubleCardId !== void 0) live.add(move.doubleCardId);
@@ -1434,17 +1382,7 @@ function deadCardIds(state, seat) {
 }
 function adjustForDeadCards(state, seat, move, score, dead) {
   const me = getPlayer2(state, seat);
-  if (move.type === "burnAction" && dead.has(move.cardId) && me.hand.length >= 5) {
-    return 1;
-  }
-  if (move.type === "discard" && dead.has(move.cardId)) {
-    const card = me.hand.find((c) => c.id === move.cardId);
-    return -0.05 - (card ? keepValue(card) : 0) / 1e5;
-  }
-  if (move.type === "bankMoney" && me.hand.length > 7) {
-    const hasDeadRent = me.hand.some((c) => c.kind === "rent" && dead.has(c.id));
-    if (hasDeadRent) return -0.2;
-  }
+  if (move.type === "burnAction" && dead.has(move.cardId) && me.hand.length >= 5) return 1;
   return score;
 }
 function chooseMove(state, seat, rng) {
@@ -1480,7 +1418,7 @@ function createGame(seed, winTarget) {
     drawPile: pile,
     firePile: [],
     players,
-    turn: { seat: startSeat, hasDrawn: false, playsUsed: 0, discarding: false },
+    turn: { seat: startSeat, hasDrawn: false, playsUsed: 0 },
     response: null,
     queue: [],
     pending: null,
@@ -1496,7 +1434,7 @@ function createGame(seed, winTarget) {
 }
 
 // src/engine/timeout.ts
-function forceEndTurn(state, seat, rng) {
+function forceEndTurn(state, seat) {
   if (state.winner !== null || state.turn.seat !== seat) return state;
   if (state.response !== null || state.pending !== null) return state;
   let next = state;
@@ -1504,15 +1442,6 @@ function forceEndTurn(state, seat, rng) {
     const drawn = applyMove(next, { type: "draw", seat });
     if (!drawn.ok) return state;
     next = drawn.state;
-  }
-  for (; ; ) {
-    const hand = next.players[seat]?.hand ?? [];
-    if (hand.length <= MAX_HAND_SIZE) break;
-    const card = hand[randomInt(rng, hand.length)];
-    if (!card) break;
-    const discarded = applyMove(next, { type: "discard", seat, cardId: card.id });
-    if (!discarded.ok) return state;
-    next = discarded.state;
   }
   const ended = applyMove(next, { type: "endTurn", seat });
   return ended.ok ? ended.state : state;
@@ -1599,10 +1528,12 @@ function joinRoom(room, playerId, name) {
     room: { ...room, seats: [...room.seats, { playerId, name: name.trim(), isBot: false, connected: true }] }
   };
 }
-function createMatchRoom(code, playerId, name, seed, now) {
+function createMatchRoom(code, playerId, name, winTarget, seed, now) {
+  const target = WIN_TARGETS.find((allowed) => allowed === winTarget);
+  if (target === void 0) return fail2("invalidWinTarget");
   const created = createRoom(code, playerId, name);
   if (!created.ok) return created;
-  return { ok: true, room: { ...created.room, winTarget: RANDOM_MATCH_WIN_TARGET, match: { openedAt: now, seed } } };
+  return { ok: true, room: { ...created.room, winTarget: target, match: { openedAt: now, seed } } };
 }
 function joinMatchRoom(room, playerId, name, now) {
   if (!room.match) return fail2("notInRoom");
@@ -1715,7 +1646,7 @@ function tick(room, now) {
       const player = game.players[seat];
       move2 = debt && player ? { type: "pay", seat, cardIds: suggestPayment(player, debt.amount) } : null;
     } else {
-      const ended = forceEndTurn(game, game.turn.seat, rng);
+      const ended = forceEndTurn(game, game.turn.seat);
       if (ended === game) return room;
       return withSeed({
         ...room,

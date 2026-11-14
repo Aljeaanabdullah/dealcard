@@ -113,7 +113,7 @@ export function readyState(handIds: readonly string[], winTarget: WinTarget = 6)
     state = emptyHand(state, player.seat);
   }
   state = placeAll(state, handIds, { zone: 'hand', seat: 0 });
-  return setTurn(state, { seat: 0, hasDrawn: true, playsUsed: 0, discarding: false });
+  return setTurn(state, { seat: 0, hasDrawn: true, playsUsed: 0 });
 }
 
 /** يرجّع الحالة الجديدة، أو يرمي خطأ إذا الحركة انرفضت. */

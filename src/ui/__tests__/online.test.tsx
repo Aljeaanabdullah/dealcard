@@ -253,6 +253,7 @@ describe('اللعب العشوائي', () => {
     await enterName(root, 'سالم');
 
     expect(await press(root, 'home-random')).toBe(true);
+    await press(root, 'random-go');
     expect(hasText(root, S.searching)).toBe(true);
     expect(hasText(root, S.playersCount(1))).toBe(true);
     expect(hasText(root, S.botsIn(30))).toBe(true);
@@ -278,6 +279,7 @@ describe('اللعب العشوائي', () => {
     const root = renderer.root;
     await enterName(root, 'سالم');
     await press(root, 'home-random');
+    await press(root, 'random-go');
 
     await advance(29000);
     expect(hasText(root, S.searching)).toBe(true);
@@ -301,7 +303,9 @@ describe('اللعب العشوائي', () => {
     await enterName(theirs.root, 'خالد');
 
     await press(mine.root, 'home-random');
+    await press(mine.root, 'random-go');
     await press(theirs.root, 'home-random');
+    await press(theirs.root, 'random-go');
     await advance(300);
 
     expect(hasText(mine.root, S.playersCount(2))).toBe(true);

@@ -3,12 +3,12 @@
 // شاشة عرض فقط: تاخذ الحالة (بعد إخفاء أيدي الباقين) وحركاتي القانونية، وتخدم اللعب المحلي والأونلاين.
 
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Card } from '../data/cards';
 import { COLORS } from '../data/colors';
-import { MAX_HAND_SIZE, MAX_PLAYS_PER_TURN, PLAYER_COUNT, TURN_SECONDS } from '../data/rules';
+import { MAX_PLAYS_PER_TURN, PLAYER_COUNT, TURN_SECONDS } from '../data/rules';
 import type { Move } from '../engine/moves';
 import { cardValue } from '../engine/payment';
 import { completeColors, countInColor, isSetComplete } from '../engine/sets';
@@ -151,19 +151,22 @@ interface TableScreenProps {
   /** آخر أكشن أو إيجار انلعب بهذا الدور: يتحدد منه مين انلعب ضده الكرت */
   readonly lastAttack: Move | null;
   readonly onMove: (move: Move) => void;
-  readonly onPlayAgain: () => void;
+  readonly onPlayAgain?: (() => void) | undefined;
+  /** خروج للبداية: من شاشة الفوز أو من داخل اللعب */
+  readonly onExit: () => void;
 }
 
-export function TableScreen({ game, moves, naming, secondsLeft, event, lastAttack, onMove, onPlayAgain }: TableScreenProps) {
+export function TableScreen({ game, moves, naming, secondsLeft, event, lastAttack, onMove, onPlayAgain, onExit }: TableScreenProps) {
+  const [confirmExit, setConfirmExit] = useState(false);
   const { width, height } = useWindowDimensions();
   const [picked, setPicked] = useState<{ readonly card: Card; readonly moves: readonly Move[] } | null>(null);
 
   const mySeat = naming.mySeat;
 
-  // إذا لعبت كل كروت دوري (أو خلصت رمي الزايد) وما بقى إلا إنهاء الدور، الدور ينتقل للاعب التالي تلقائياً.
+  // إذا لعبت كل كروت دوري وما بقى إلا إنهاء الدور، الدور ينتقل للاعب التالي تلقائياً (والزايد عن 7 ينحرق عشوائياً).
   const onlyMove = moves.length === 1 ? moves[0] : undefined;
   const playLimit = MAX_PLAYS_PER_TURN + game.extraPlays;
-  const playsDone = game.turn.playsUsed >= playLimit || game.turn.discarding;
+  const playsDone = game.turn.playsUsed >= playLimit;
   const autoEnd = game.winner === null && playsDone && onlyMove?.type === 'endTurn' && onlyMove.seat === mySeat;
   useEffect(() => {
     if (!autoEnd) return undefined;
@@ -175,7 +178,7 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastAttac
 
   const me = game.players[mySeat];
   if (!me) return null;
-  if (game.winner !== null) return <EndScreen game={game} naming={naming} onPlayAgain={onPlayAgain} />;
+  if (game.winner !== null) return <EndScreen game={game} naming={naming} onPlayAgain={onPlayAgain} onExit={onExit} />;
 
   // اللاعبين حولي بترتيب المقاعد: اليمين ثم المقابل ثم اليسار.
   const rightSeat = (mySeat + 1) % PLAYER_COUNT;
@@ -237,6 +240,9 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastAttac
           <View style={styles.between}>
             <Text style={styles.turn}>{myTurn ? S.yourTurn : S.turnOf(seatName(game.turn.seat, naming))}</Text>
             {myTurn ? <Text style={styles.timer}>{formatTime(secondsLeft)}</Text> : null}
+            <Pressable testID="table-exit" accessibilityRole="button" style={styles.exit} onPress={() => setConfirmExit(true)}>
+              <Text style={styles.exitText}>{S.exitGame}</Text>
+            </Pressable>
           </View>
           {myTurn ? (
             <View style={styles.timeTrack}>
@@ -375,12 +381,28 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastAttac
               onPress={() => doMove({ type: 'endTurn', seat: mySeat })}
             >
               <Text style={styles.secondaryText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                {me.hand.length > MAX_HAND_SIZE ? S.discardFirst : S.endTurn}
+                {S.endTurn}
               </Text>
             </Pressable>
           ) : null}
         </View>
       </View>
+
+      {confirmExit ? (
+        <Modal transparent visible animationType="fade" supportedOrientations={['landscape']} onRequestClose={() => setConfirmExit(false)}>
+          <View style={styles.exitBackdrop}>
+            <View style={styles.exitSheet}>
+              <Text style={styles.exitTitle}>{S.exitConfirm}</Text>
+              <Pressable testID="exit-yes" accessibilityRole="button" style={styles.primary} onPress={onExit}>
+                <Text style={styles.primaryText}>{S.exitYes}</Text>
+              </Pressable>
+              <Pressable testID="exit-no" accessibilityRole="button" style={styles.secondary} onPress={() => setConfirmExit(false)}>
+                <Text style={styles.secondaryText}>{S.exitStay}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
 
       {/* النوافذ: الرد أولاً، ثم الدفع، ثم لعب الكرت */}
       {effect && responseMoves.length > 0 ? (
@@ -712,5 +734,38 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.45,
+  },
+  exit: {
+    minHeight: 26,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.muted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exitText: {
+    color: theme.muted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  exitBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exitSheet: {
+    width: 320,
+    padding: 16,
+    gap: 10,
+    borderRadius: 14,
+    backgroundColor: theme.panel,
+  },
+  exitTitle: {
+    color: theme.text,
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
   },
 });

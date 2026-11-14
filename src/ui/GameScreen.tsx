@@ -11,10 +11,13 @@ import { useGame } from './useGame';
 interface GameScreenProps {
   readonly winTarget: WinTarget;
   readonly seed: number;
+  /** مباراة جديدة بنفس شرط الفوز */
   readonly onPlayAgain: () => void;
+  /** خروج للبداية */
+  readonly onExit: () => void;
 }
 
-export function GameScreen({ winTarget, seed, onPlayAgain }: GameScreenProps) {
+export function GameScreen({ winTarget, seed, onPlayAgain, onExit }: GameScreenProps) {
   const { game, secondsLeft, event, lastAttack, play } = useGame(winTarget, seed);
 
   return (
@@ -27,6 +30,7 @@ export function GameScreen({ winTarget, seed, onPlayAgain }: GameScreenProps) {
       lastAttack={lastAttack}
       onMove={play}
       onPlayAgain={onPlayAgain}
+      onExit={onExit}
     />
   );
 }

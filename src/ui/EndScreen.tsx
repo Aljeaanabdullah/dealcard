@@ -1,4 +1,4 @@
-// شاشة نهاية اللعبة: الفائز، ملخص، إعادة اللعب — prd.md القسم 7
+// شاشة نهاية اللعبة: الفائز، ملخص، إعادة اللعب، خروج للبداية — prd.md القسم 7
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,10 +13,12 @@ import { SET_COLORS, theme } from './theme';
 interface EndScreenProps {
   readonly game: GameState;
   readonly naming: Naming;
-  readonly onPlayAgain: () => void;
+  /** بدون تحديد = ما يطلع زر إعادة اللعب (مثلاً غرفة خاصة أونلاين) */
+  readonly onPlayAgain?: (() => void) | undefined;
+  readonly onExit: () => void;
 }
 
-export function EndScreen({ game, naming, onPlayAgain }: EndScreenProps) {
+export function EndScreen({ game, naming, onPlayAgain, onExit }: EndScreenProps) {
   const winner = game.players.find((player) => player.seat === game.winner);
   const winnerSets = winner ? completeColors(winner.properties) : [];
   const rows = game.players
@@ -54,8 +56,13 @@ export function EndScreen({ game, naming, onPlayAgain }: EndScreenProps) {
             <Text style={[styles.text, styles.column]}>{row.bank}</Text>
           </View>
         ))}
-        <Pressable testID="replay" accessibilityRole="button" style={styles.primary} onPress={onPlayAgain}>
-          <Text style={styles.primaryText}>{S.playAgain}</Text>
+        {onPlayAgain ? (
+          <Pressable testID="replay" accessibilityRole="button" style={styles.primary} onPress={onPlayAgain}>
+            <Text style={styles.primaryText}>{S.playAgain}</Text>
+          </Pressable>
+        ) : null}
+        <Pressable testID="exit-home" accessibilityRole="button" style={styles.secondary} onPress={onExit}>
+          <Text style={styles.secondaryText}>{S.exitHome}</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -148,6 +155,20 @@ const styles = StyleSheet.create({
   primaryText: {
     color: theme.cardInk,
     fontSize: 18,
+    fontWeight: '800',
+  },
+  secondary: {
+    minHeight: 44,
+    marginTop: 4,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: theme.text,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryText: {
+    color: theme.text,
+    fontSize: 16,
     fontWeight: '800',
   },
 });

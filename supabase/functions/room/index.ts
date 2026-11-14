@@ -36,6 +36,7 @@ function json(body: unknown, status = 200): Response {
 interface RoomLike {
   readonly code: string;
   readonly status: string;
+  readonly winTarget?: number;
   readonly seats: readonly { readonly playerId: string | null }[];
   /** غرفة لعب عشوائي */
   readonly match?: unknown;
@@ -116,6 +117,8 @@ Deno.serve(async (req) => {
   // اللعب العشوائي: طابور يجمع اللاعبين في غرف من 4.
   if (action === 'random') {
     const name = String(body.name ?? '');
+    // شرط الفوز يختاره اللاعب قبل البحث (6 أو 8)، وينحط مع لاعبين اختاروا نفس الشرط.
+    const winTarget = Number(body.winTarget);
     for (let attempt = 0; attempt < 5; attempt++) {
       // لاعب ما يدخل مباراتين بنفس الوقت: إذا هو داخل غرفة ما انتهت يرجع لها.
       const { data: mine } = await admin
@@ -137,8 +140,10 @@ Deno.serve(async (req) => {
         .gt('seat_count', 0)
         .lt('seat_count', 4)
         .order('updated_at', { ascending: false })
-        .limit(10);
-      const open = (candidates ?? []).filter((row) => isOpenMatch(row.state, now)).pop();
+        .limit(40);
+      const open = (candidates ?? [])
+        .filter((row) => isOpenMatch(row.state, now) && (row.state as RoomLike).winTarget === winTarget)
+        .pop();
 
       if (open) {
         const joined: ActionResult = joinMatchRoom(open.state, playerId, name, now);
@@ -149,7 +154,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const created: ActionResult = createMatchRoom(generateRoomCode(createRng(randomSeed())), playerId, name, randomSeed(), now);
+      const created: ActionResult = createMatchRoom(generateRoomCode(createRng(randomSeed())), playerId, name, winTarget, randomSeed(), now);
       if (!created.ok) return json(created);
       if (!created.room) return json({ ok: false, error: 'network' }, 500);
       if (await save(created.room, null)) return json({ ok: true, snapshot: snapshotFor(created.room, playerId) });

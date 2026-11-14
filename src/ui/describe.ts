@@ -175,8 +175,6 @@ export function describeMove(move: Move, state: GameState, naming: Naming): stri
       return S.buildOn(colorName(move.color));
     case 'burnAction':
       return S.burn;
-    case 'discard':
-      return S.discard;
     case 'pay':
       return S.payConfirm;
     case 'playRent': {
@@ -253,8 +251,6 @@ export function describeEvent(move: Move, state: GameState, naming: Naming): str
     }
     case 'respond':
       return move.cardId === undefined ? S.eventPassed(name) : S.eventPlayed(name, describeMove(move, state, naming));
-    case 'discard':
-      return S.eventPlayed(name, S.discard);
     default: {
       const cardName = 'cardId' in move ? cardLabel(move.cardId) : '';
       return S.eventPlayed(name, join([cardName, describeMove(move, state, naming)]));

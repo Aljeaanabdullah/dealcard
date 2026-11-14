@@ -196,8 +196,8 @@ describe('واجهة اللعب ضد البوتات', () => {
     expect(myTurns).toBeGreaterThan(3);
     if (finished) {
       expect(hasText(root, S.summary)).toBe(true);
-      // إعادة اللعب ترجع للشاشة الرئيسية
-      press(root, 'replay');
+      // خروج للبداية يرجع للشاشة الرئيسية
+      press(root, 'exit-home');
       expect(hasText(root, S.playVsBots)).toBe(true);
     }
     act(() => renderer.unmount());

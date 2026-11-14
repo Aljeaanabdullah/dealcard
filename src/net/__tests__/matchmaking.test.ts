@@ -35,10 +35,10 @@ function host(): { readonly server: MemoryHost; advance(ms: number): void; now()
   };
 }
 
-async function joinAll(server: MemoryHost, ids: readonly string[]): Promise<RoomSnapshot[]> {
+async function joinAll(server: MemoryHost, ids: readonly string[], winTarget = 6): Promise<RoomSnapshot[]> {
   const results: RoomSnapshot[] = [];
   for (const id of ids) {
-    results.push(snapshot(await server.transportFor(id).joinRandom(`لاعب ${id}`)));
+    results.push(snapshot(await server.transportFor(id).joinRandom(`لاعب ${id}`, winTarget)));
   }
   return results;
 }
@@ -60,19 +60,38 @@ describe('طابور اللعب العشوائي', () => {
     expect(room?.seats.map((s) => s.playerId)).toEqual(['a', 'b', 'c', 'd']);
   });
 
-  it('شرط الفوز الثابت للعشوائي: 6 أطقم، وما يتغير وما تبدأ اللعبة يدوياً', async () => {
+  it('اللاعب يختار شرط الفوز قبل البحث (6 أو 8)، وما يتغير بعدها وما تبدأ اللعبة يدوياً', async () => {
     const { server, now } = host();
-    const [first] = await joinAll(server, ['a']);
-    expect(first?.winTarget).toBe(6);
+    const [first] = await joinAll(server, ['a'], 8);
+    expect(first?.winTarget).toBe(8);
     expect(first?.matchmaking).toBe(true);
 
     const room = server.roomOf(first?.code ?? '');
     if (!room) throw new Error('ما فيه غرفة');
-    expect(setWinTarget(room, 'a', 8)).toEqual({ ok: false, error: 'fixedWinTarget' });
+    expect(setWinTarget(room, 'a', 6)).toEqual({ ok: false, error: 'fixedWinTarget' });
     expect(startRoom(room, 'a', 1, now())).toEqual({ ok: false, error: 'notHost' });
 
-    await joinAll(server, ['b', 'c', 'd']);
-    expect(server.roomOf(first?.code ?? '')?.game?.winTarget).toBe(6);
+    await joinAll(server, ['b', 'c', 'd'], 8);
+    expect(server.roomOf(first?.code ?? '')?.game?.winTarget).toBe(8);
+  });
+
+  it('اللي اختار 6 ما ينحط مع اللي اختار 8: كل شرط له غرفته', async () => {
+    const { server } = host();
+    const [six] = await joinAll(server, ['a'], 6);
+    const [eight] = await joinAll(server, ['b'], 8);
+    expect(eight?.code).not.toBe(six?.code);
+    expect(six?.winTarget).toBe(6);
+    expect(eight?.winTarget).toBe(8);
+
+    const [sixAgain] = await joinAll(server, ['c'], 6);
+    const [eightAgain] = await joinAll(server, ['d'], 8);
+    expect(sixAgain?.code).toBe(six?.code);
+    expect(eightAgain?.code).toBe(eight?.code);
+  });
+
+  it('شرط فوز غير 6 أو 8 ينرفض', async () => {
+    const { server } = host();
+    expect(await server.transportFor('a').joinRandom('لاعب', 7)).toEqual({ ok: false, error: 'invalidWinTarget' });
   });
 
   it('جهاز واحد لوحده: بعد 30 ثانية تبدأ المباراة مع 3 بوتات', async () => {
@@ -223,20 +242,20 @@ describe('طابور اللعب العشوائي', () => {
 
   it('بدون اسم ينرفض', async () => {
     const { server } = host();
-    expect(await server.transportFor('a').joinRandom('  ')).toEqual({ ok: false, error: 'nameRequired' });
+    expect(await server.transportFor('a').joinRandom('  ', 6)).toEqual({ ok: false, error: 'nameRequired' });
   });
 });
 
 describe('اختيار الغرفة', () => {
   function matchRoom(code: string, playerId: string, openedAt: number): Room {
-    const created = createMatchRoom(code, playerId, 'لاعب', 5, openedAt);
+    const created = createMatchRoom(code, playerId, 'لاعب', 6, 5, openedAt);
     if (!created.ok) throw new Error(created.error);
     return created.room;
   }
 
   it('اللاعب يدخل أقدم غرفة مفتوحة', () => {
     const rooms = [matchRoom('NEWER', 'x', 9000), matchRoom('OLDER', 'y', 1000)];
-    const result = joinRandomMatch(rooms, 'me', 'أنا', 'FRESH', 1, 10000);
+    const result = joinRandomMatch(rooms, 'me', 'أنا', 6, 'FRESH', 1, 10000);
     expect(result.ok && result.room.code).toBe('OLDER');
     expect(result.ok && result.changed).toBe(true);
   });
@@ -244,14 +263,14 @@ describe('اختيار الغرفة', () => {
   it('إذا ما فيه غرفة مفتوحة تنفتح غرفة جديدة بالكود المعطى', () => {
     const privateRoom = createRoom('PRIV8', 'host', 'صاحب');
     if (!privateRoom.ok) throw new Error(privateRoom.error);
-    const result = joinRandomMatch([privateRoom.room], 'me', 'أنا', 'FRESH', 1, 10000);
+    const result = joinRandomMatch([privateRoom.room], 'me', 'أنا', 6, 'FRESH', 1, 10000);
     expect(result.ok && result.room.code).toBe('FRESH');
     expect(result.ok && result.room.match).toEqual({ openedAt: 10000, seed: 1 });
   });
 
   it('اللاعب الموجود بغرفة ما انتهت يرجع لها بدون تغيير', () => {
     const mine = matchRoom('MINE1', 'me', 1000);
-    const result = joinRandomMatch([matchRoom('OTHER', 'x', 500), mine], 'me', 'أنا', 'FRESH', 1, 10000);
+    const result = joinRandomMatch([matchRoom('OTHER', 'x', 500), mine], 'me', 'أنا', 6, 'FRESH', 1, 10000);
     expect(result).toEqual({ ok: true, room: mine, changed: false });
   });
 });

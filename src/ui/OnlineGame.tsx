@@ -17,9 +17,11 @@ interface OnlineGameProps {
   readonly transport: Transport;
   readonly initial: RoomSnapshot;
   readonly onExit: () => void;
+  /** دخول غرفة جديدة (إعادة اللعب العشوائي) */
+  readonly onEnterRoom: (snapshot: RoomSnapshot) => void;
 }
 
-export function OnlineGame({ transport, initial, onExit }: OnlineGameProps) {
+export function OnlineGame({ transport, initial, onExit, onEnterRoom }: OnlineGameProps) {
   const [snapshot, setSnapshot] = useState(initial);
   const [now, setNow] = useState(() => Date.now());
   const code = initial.code;
@@ -49,6 +51,19 @@ export function OnlineGame({ transport, initial, onExit }: OnlineGameProps) {
     onExit();
   };
 
+  /** إعادة اللعب بالعشوائي: يطلع من المباراة المنتهية ويدخل الطابور من جديد بنفس شرط الفوز. */
+  const playAgain = () => {
+    const myName = snapshot.seats[snapshot.mySeat]?.name ?? '';
+    const target = snapshot.winTarget;
+    void transport
+      .leave(code)
+      .then(() => transport.joinRandom(myName, target))
+      .then((result) => {
+        if (result.ok && result.snapshot) onEnterRoom(result.snapshot);
+        else onExit();
+      });
+  };
+
   // اللعب العشوائي: شاشة "جاري البحث عن لاعبين" مع زر إلغاء.
   if ((snapshot.status === 'lobby' || !snapshot.state) && snapshot.matchmaking) {
     const secondsToStart = Math.max(0, Math.ceil((snapshot.matchDeadline - now) / 1000));
@@ -56,7 +71,7 @@ export function OnlineGame({ transport, initial, onExit }: OnlineGameProps) {
     return (
       <SafeAreaView style={[styles.root, styles.search]} edges={['top', 'bottom', 'left', 'right']}>
         <Text style={styles.searchTitle}>{S.searching}</Text>
-        <Text style={styles.small}>{S.searchingHint}</Text>
+        <Text testID="search-target" style={styles.small}>{S.searchingHint(snapshot.winTarget)}</Text>
         <Text testID="search-count" style={styles.title}>
           {S.playersCount(snapshot.seats.length)}
         </Text>
@@ -141,7 +156,8 @@ export function OnlineGame({ transport, initial, onExit }: OnlineGameProps) {
       event={snapshot.lastMove ? describeEvent(snapshot.lastMove, game, naming) : ''}
       lastAttack={snapshot.lastAttack ?? null}
       onMove={(move) => request(transport.sendMove(code, move))}
-      onPlayAgain={leave}
+      onPlayAgain={snapshot.matchmaking ? playAgain : undefined}
+      onExit={leave}
     />
   );
 }

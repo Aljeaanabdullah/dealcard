@@ -88,7 +88,6 @@ while (status === 'playing' && steps < 4000) {
       options.find((m) => m.type === 'pay') ??
       options.find((m) => m.type === 'bankMoney') ??
       options.find((m) => m.type === 'endTurn') ??
-      options.find((m) => m.type === 'discard') ??
       options[0];
     const result = await player.call({ action: 'move', code, move: pick });
     if (!result.ok) throw new Error(`حركة قانونية انرفضت: ${result.error} ${JSON.stringify(pick)}`);
@@ -123,20 +122,28 @@ console.log('اللعب العشوائي:');
 const r1 = await guest('R1');
 const r2 = await guest('R2');
 
-const first = await r1.call({ action: 'random', name: 'عشوائي 1' });
+const first = await r1.call({ action: 'random', name: 'عشوائي 1', winTarget: 6 });
 check(first.ok && first.snapshot.status === 'lobby' && first.snapshot.matchmaking === true, 'أول لاعب يدخل الطابور وينتظر');
-check(first.snapshot.winTarget === 6, 'شرط الفوز الثابت 6 أطقم');
+check(first.snapshot.winTarget === 6, 'شرط الفوز اللي اختاره اللاعب: 6 أطقم');
 const matchCode = first.snapshot.code;
 const openedAt = Date.now();
 
-const second = await r2.call({ action: 'random', name: 'عشوائي 2' });
+const second = await r2.call({ action: 'random', name: 'عشوائي 2', winTarget: 6 });
 check(second.ok && second.snapshot.code === matchCode, 'اللاعب الثاني يدخل نفس الغرفة');
 check(second.snapshot.seats.length === 2, 'الغرفة فيها لاعبين');
 
-const again = await r1.call({ action: 'random', name: 'عشوائي 1' });
+// لاعب اختار 8 أطقم ما ينحط مع اللي اختاروا 6
+const r3 = await guest('R3');
+const eight = await r3.call({ action: 'random', name: 'عشوائي 3', winTarget: 8 });
+check(eight.ok && eight.snapshot.code !== matchCode && eight.snapshot.winTarget === 8, 'اللي اختار 8 أطقم تنفتح له غرفة ثانية بشرط 8');
+check((await r3.call({ action: 'leave', code: eight.snapshot.code })).ok, 'لاعب الـ8 يلغي البحث');
+const bad = await r3.call({ action: 'random', name: 'عشوائي 3', winTarget: 7 });
+check(bad.ok === false && bad.error === 'invalidWinTarget', 'شرط فوز غير 6 أو 8 ينرفض');
+
+const again = await r1.call({ action: 'random', name: 'عشوائي 1', winTarget: 6 });
 check(again.ok && again.snapshot.code === matchCode && again.snapshot.seats.length === 2, 'الضغط مرة ثانية يرجّع لنفس الغرفة (ما يدخل مباراتين)');
 
-check((await r1.call({ action: 'setWinTarget', code: matchCode, winTarget: 8 })).error === 'fixedWinTarget', 'شرط الفوز ما يتغير بالعشوائي');
+check((await r1.call({ action: 'setWinTarget', code: matchCode, winTarget: 8 })).error === 'fixedWinTarget', 'شرط الفوز ما يتغير بعد دخول الطابور');
 check((await r1.call({ action: 'start', code: matchCode })).error === 'notHost', 'اللعبة ما تبدأ يدوياً بالعشوائي');
 
 // إلغاء البحث
@@ -157,11 +164,11 @@ check(begun.ok && begun.snapshot.status === 'playing', 'بعد 30 ثانية ا�
 check(begun.snapshot.seats.map((s) => s.isBot).join() === 'false,true,true,true', 'البوتات كملت العدد: لاعب واحد و3 بوتات');
 check(begun.snapshot.state.winTarget === 6, 'المباراة شرطها 6 أطقم');
 
-const during = await r1.call({ action: 'random', name: 'عشوائي 1' });
+const during = await r1.call({ action: 'random', name: 'عشوائي 1', winTarget: 6 });
 check(during.ok && during.snapshot.code === matchCode && during.snapshot.status === 'playing', 'اللاعب اللي بمباراة يرجع لمباراته');
 
 // اللاعب اللي ألغى يدخل غرفة جديدة، مو المباراة اللي بدأت
-const fresh = await r2.call({ action: 'random', name: 'عشوائي 2' });
+const fresh = await r2.call({ action: 'random', name: 'عشوائي 2', winTarget: 6 });
 check(fresh.ok && fresh.snapshot.code !== matchCode && fresh.snapshot.status === 'lobby', 'اللاعب الجديد تنفتح له غرفة جديدة');
 
 // تنظيف: نطلع من الغرف عشان ما تبقى معلّقة

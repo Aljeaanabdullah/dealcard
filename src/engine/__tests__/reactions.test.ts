@@ -287,7 +287,7 @@ describe('فزعه', () => {
   it('فزعه ضد العيادي: يلغيه عن اللاعب اللي فزعت له فقط، وما يحمّلني دفعه (أدفع نصيبي أنا بس)', () => {
     // بوت 1 يلعب العيادي على الكل. أنا (المقعد 0) بيدي فزعه وأفزع للمقعد 2.
     let state = readyState([]);
-    state = { ...state, turn: { seat: 1, hasDrawn: true, playsUsed: 0, discarding: false } };
+    state = { ...state, turn: { seat: 1, hasDrawn: true, playsUsed: 0 } };
     state = place(state, 'action:eyadi:1', { zone: 'hand', seat: 1 });
     state = place(state, 'action:fazaah:1', { zone: 'hand', seat: ME });
     for (const [seat, cardId] of [

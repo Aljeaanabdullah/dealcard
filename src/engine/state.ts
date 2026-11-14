@@ -98,8 +98,6 @@ export interface TurnState {
   readonly hasDrawn: boolean;
   /** عدد الكروت الملعوبة بهذا الدور */
   readonly playsUsed: number;
-  /** بدأ يرمي الزايد: ما يقدر يلعب كروت بعدها */
-  readonly discarding: boolean;
 }
 
 export interface GameState {
@@ -150,7 +148,7 @@ export function createGame(seed: number, winTarget: WinTarget): GameState {
     drawPile: pile,
     firePile: [],
     players,
-    turn: { seat: startSeat, hasDrawn: false, playsUsed: 0, discarding: false },
+    turn: { seat: startSeat, hasDrawn: false, playsUsed: 0 },
     response: null,
     queue: [],
     pending: null,

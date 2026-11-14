@@ -33,6 +33,7 @@ function render(game: GameState, lastAttack: Move | null, onMove: (move: Move) =
         lastAttack={lastAttack}
         onMove={onMove}
         onPlayAgain={() => undefined}
+        onExit={() => undefined}
       />,
     );
   });
@@ -123,24 +124,13 @@ describe('انتقال الدور تلقائياً', () => {
     act(() => renderer.unmount());
   });
 
-  it('ما ينتقل إذا يدي فوق 7: لازم أرمي الزايد أول', () => {
+  it('ينتقل حتى لو يدي فوق 7: الزايد ينحرق عشوائياً بنهاية الدور', () => {
     const onMove = jest.fn();
     const hand = ['money:1:1', 'money:1:2', 'money:1:3', 'money:1:4', 'money:1:5', 'money:1:6', 'money:1:7', 'money:1:8'];
     const game = setTurn(readyState(hand), { playsUsed: 3 });
     const renderer = render(game, null, onMove);
     act(() => {
       jest.advanceTimersByTime(2000);
-    });
-    expect(onMove).not.toHaveBeenCalled();
-    act(() => renderer.unmount());
-  });
-
-  it('بعد ما أخلص رمي الزايد ينتقل الدور', () => {
-    const onMove = jest.fn();
-    const game = setTurn(readyState(['money:1:1']), { playsUsed: 1, discarding: true });
-    const renderer = render(game, null, onMove);
-    act(() => {
-      jest.advanceTimersByTime(700);
     });
     expect(onMove).toHaveBeenCalledWith({ type: 'endTurn', seat: 0 });
     act(() => renderer.unmount());
