@@ -21,19 +21,26 @@ export function CardView({ card, width, height, selected = false, description, o
   const info = cardInfo(card);
   const nameSize = Math.max(10, Math.min(18, width * 0.2));
   const bandHeight = Math.max(8, height * 0.13);
+  // كرت بلون كامل: الوجه كله بلونه والكتابة فاتحة.
+  const filled = info.fill !== undefined;
 
   const body = (
-    <View style={[styles.card, { width, height }, selected && styles.selected]}>
+    <View style={[styles.card, { width, height }, filled && { backgroundColor: info.fill }, selected && styles.selected]}>
       <Band info={info} top height={bandHeight} />
-      <Text style={styles.kind} numberOfLines={1}>
+      <Text style={[styles.kind, filled && styles.onFill]} numberOfLines={1}>
         {info.kind}
       </Text>
       <View style={styles.nameBox}>
-        <Text style={[styles.name, { fontSize: nameSize }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+        <Text
+          style={[styles.name, { fontSize: nameSize }, filled && styles.onFill]}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
+        >
           {info.name}
         </Text>
       </View>
-      <Text style={styles.sub} numberOfLines={description ? 3 : 1} adjustsFontSizeToFit minimumFontScale={0.7}>
+      <Text style={[styles.sub, filled && styles.onFill]} numberOfLines={description ? 3 : 1} adjustsFontSizeToFit minimumFontScale={0.7}>
         {description ?? info.sub}
       </Text>
       {info.bandBottom !== undefined || info.stripes !== undefined ? <Band info={info} top={false} height={bandHeight} /> : null}
@@ -124,6 +131,9 @@ const styles = StyleSheet.create({
     color: theme.cardInk,
     fontWeight: '800',
     textAlign: 'center',
+  },
+  onFill: {
+    color: theme.cardFace,
   },
   sub: {
     fontSize: 10,

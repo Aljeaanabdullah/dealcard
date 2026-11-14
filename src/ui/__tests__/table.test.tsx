@@ -1,5 +1,6 @@
 // اختبارات ملاحظات صاحب المشروع على الطاولة:
 // ألوان كرت الإيجار، انتقال الدور تلقائياً، وسهم على اللاعب المستهدف.
+import { StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { buildDeck, type Card } from '../../data/cards';
@@ -10,7 +11,8 @@ import { giveFullSet, place, readyState, setTurn } from '../../testing/helpers';
 import { cardInfo, LOCAL_NAMING, moveTargets } from '../describe';
 import { TableScreen } from '../TableScreen';
 import { S } from '../strings';
-import { SET_COLORS } from '../theme';
+import { CardView } from '../CardView';
+import { SET_COLORS, theme } from '../theme';
 
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 
@@ -96,6 +98,49 @@ describe('ألوان كرت الإيجار', () => {
     expect(info.band).toBe(SET_COLORS.red);
     expect(info.bandBottom).toBeUndefined();
     expect(info.stripes).toBeUndefined();
+    expect(info.fill).toBeUndefined();
+  });
+});
+
+describe('كروت بلون كامل', () => {
+  const purple = ['راحت عليك', 'حيور', 'حصانه', 'طب وتخير'];
+  const blue = ['مالك امل', 'استريح'];
+
+  it('البنفسجي والأزرق مثل ما حددهم صاحب المشروع، وباقي الكروت وجهها فاتح', () => {
+    const fills = new Map<string, string | undefined>();
+    for (const c of buildDeck()) {
+      const info = cardInfo(c);
+      if (c.kind !== 'action') expect(info.fill).toBeUndefined();
+      else fills.set(info.name, info.fill);
+    }
+    for (const [name, fill] of fills) {
+      const expected = purple.includes(name) ? SET_COLORS.purple : blue.includes(name) ? SET_COLORS.darkBlue : undefined;
+      expect([name, fill]).toEqual([name, expected]);
+    }
+    for (const name of [...purple, ...blue]) expect(fills.has(name)).toBe(true);
+  });
+
+  it('الكرت ينرسم بوجه ملوّن كامل وكتابة فاتحة، والكرت العادي يبقى فاتح', () => {
+    const flat = (style: unknown) => StyleSheet.flatten(style as StyleProp<ViewStyle & TextStyle>);
+    const draw = (id: string) => {
+      let renderer: ReactTestRenderer | undefined;
+      act(() => {
+        renderer = create(<CardView card={card(id)} width={70} height={100} />);
+      });
+      if (!renderer) throw new Error('الكرت ما انعرض');
+      const views = renderer.root.findAll((node) => (node.type as unknown) === 'View');
+      const textNodes = renderer.root.findAll((node) => (node.type as unknown) === 'Text');
+      return { face: flat(views[0]?.props.style)?.backgroundColor, inks: textNodes.map((node) => flat(node.props.style)?.color) };
+    };
+    const hayyour = draw('action:hayyour:1');
+    expect(hayyour.face).toBe(SET_COLORS.purple);
+    expect(new Set(hayyour.inks)).toEqual(new Set([theme.cardFace]));
+
+    expect(draw('action:malekAmal:1').face).toBe(SET_COLORS.darkBlue);
+
+    const plain = draw('action:draw2:1');
+    expect(plain.face).toBe(theme.cardFace);
+    expect(plain.inks).not.toContain(theme.cardFace);
   });
 });
 

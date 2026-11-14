@@ -1,5 +1,6 @@
 // ألوان الواجهة — من المرجع البصري في design/
 
+import type { ActionId } from '../data/cards';
 import type { ColorId } from '../data/colors';
 
 export const theme = {
@@ -29,6 +30,16 @@ export const SET_COLORS: Record<ColorId, string> = {
   green: '#2E9E5B',
   darkBlue: '#1F3C88',
   black: '#222222',
+};
+
+/** كروت أكشن وجهها كله بلون واحد (بنفسجي أو أزرق) — prd.md القسم 4. الباقي وجهه فاتح بشريط ملوّن. */
+export const CARD_FILL: Partial<Record<ActionId, string>> = {
+  rahatAlek: SET_COLORS.purple,
+  hayyour: SET_COLORS.purple,
+  hasanah: SET_COLORS.purple,
+  tebWetkhayyar: SET_COLORS.purple,
+  malekAmal: SET_COLORS.darkBlue,
+  estareeh: SET_COLORS.darkBlue,
 };
 
 /** لون شريط الكرت حسب نوعه. */

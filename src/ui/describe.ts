@@ -10,7 +10,7 @@ import type { Move } from '../engine/moves';
 import { cardValue, rentFor } from '../engine/payment';
 import type { Effect, GameState } from '../engine/state';
 import { S } from './strings';
-import { BAND, SET_COLORS } from './theme';
+import { BAND, CARD_FILL, SET_COLORS } from './theme';
 
 /** مقعد اللاعب باللعب المحلي ضد البوتات. */
 export const HUMAN_SEAT = 0;
@@ -71,6 +71,8 @@ export interface CardInfo {
   readonly bandBottom?: string;
   /** شريط بكل الألوان (كرت الإيجار اللي يصلح لأي لون) */
   readonly stripes?: readonly string[];
+  /** لون وجه الكرت كله (كروت اللون الكامل)؛ والكتابة عليه فاتحة */
+  readonly fill?: string;
   readonly kind: string;
   readonly name: string;
   readonly sub: string;
@@ -119,8 +121,10 @@ export function cardInfo(card: Card): CardInfo {
     case 'action': {
       const def = ACTIONS.find((d) => d.id === card.action);
       const group = def?.group ?? 'turn';
+      const fill = CARD_FILL[card.action];
       return {
-        band: BAND[group],
+        band: fill ?? BAND[group],
+        ...(fill !== undefined ? { fill } : {}),
         kind: group === 'defense' ? S.kindDefense : S.kindAction,
         name: def?.name ?? '',
         sub: def && 'amount' in def && def.amount !== undefined ? S.amount(def.amount) : '',
