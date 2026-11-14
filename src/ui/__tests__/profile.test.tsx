@@ -139,6 +139,8 @@ describe('شاشة الدخول: حسابي / حساب جديد / ضيف', () =>
       jest.advanceTimersByTime(2600);
     });
     expect(hasText(root, S.authTitle)).toBe(true);
+    // اللوقو بشاشة البداية بس، مو بشاشة الدخول
+    expect(root.findAll((node) => node.props.accessibilityLabel === S.appName)).toHaveLength(0);
     for (const id of ['auth-mine', 'auth-new', 'auth-guest']) expect(buttons(root, id)).toHaveLength(1);
     expect(buttons(root, 'home-bots')).toHaveLength(0);
     // ما تطلع نافذة الاسم فوق شاشة الدخول
@@ -177,8 +179,10 @@ describe('شاشة الدخول: حسابي / حساب جديد / ضيف', () =>
     await type(root, 'auth-email', 'salem@example.com');
     await type(root, 'auth-password', 'secret1');
     await press(root, 'auth-submit');
+    // فوق يطلع الاسم بس، والإيميل ما يبان بالرئيسية
     expect(hasText(root, S.hello('سالم'))).toBe(true);
-    expect(hasText(root, 'salem@example.com')).toBe(true);
+    expect(hasText(root, 'salem@example.com')).toBe(false);
+    expect(hasText(root, S.myAccount)).toBe(true);
 
     // تعديل الشخصية وهو داخل بحسابه ينحفظ على الحساب
     await press(root, 'edit-avatar');

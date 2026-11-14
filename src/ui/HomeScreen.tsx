@@ -115,7 +115,8 @@ export function HomeScreen({
         {account ? (
           <Pressable testID="home-account" accessibilityRole="button" style={styles.settings} onPress={() => (email === null ? onOpenAuth() : setDialog('account'))}>
             <Text style={styles.small} numberOfLines={1}>
-              {email ?? S.account}
+              {/* فوق يطلع الاسم بس؛ الإيميل داخل نافذة الحساب */}
+              {email === null ? S.account : S.myAccount}
             </Text>
           </Pressable>
         ) : null}

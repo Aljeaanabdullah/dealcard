@@ -1,9 +1,10 @@
 // شاشة الدخول: أول شي يطلع بعد اللوقو — prd.md القسم 7
+// اللوقو يطلع بشاشة البداية فقط، وهنا بدون لوقو.
 // ثلاث خيارات: دخول بحسابي، حساب جديد، أو دخول ضيف. كل خيار له خاناته وزره الواضح.
 // كلمة السر تروح لخدمة الدخول مباشرة وتنمسح من الشاشة بعد الإرسال.
 
 import { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Account, Profile } from '../net/account';
@@ -20,8 +21,6 @@ interface AuthScreenProps {
 }
 
 type Mode = 'choose' | 'signIn' | 'signUp' | 'guest';
-
-const LOGO = require('../../assets/logo.png') as number;
 
 export function AuthScreen({ account, name, avatar, onSignedIn, onGuest }: AuthScreenProps) {
   const [mode, setMode] = useState<Mode>('choose');
@@ -65,8 +64,7 @@ export function AuthScreen({ account, name, avatar, onSignedIn, onGuest }: AuthS
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']}>
-      <Image source={LOGO} style={styles.logo} resizeMode="contain" accessibilityLabel={S.appName} />
-      <ScrollView style={styles.flex} contentContainerStyle={styles.side} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.side} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>{title}</Text>
 
         {mode === 'choose' ? (
@@ -156,18 +154,16 @@ export function AuthScreen({ account, name, avatar, onSignedIn, onGuest }: AuthS
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    flexDirection: 'row',
     backgroundColor: theme.ground,
     paddingHorizontal: 16,
-    gap: 16,
+    alignItems: 'center',
   },
   flex: {
     flex: 1,
   },
-  logo: {
-    height: '100%',
-    aspectRatio: 1,
-    maxWidth: '40%',
+  scroll: {
+    flex: 1,
+    width: '60%',
   },
   side: {
     flexGrow: 1,

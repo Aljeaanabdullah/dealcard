@@ -241,6 +241,7 @@ export const S = {
   avatarLabel: (n: number) => `شخصية ${n}`,
   // الحساب (اختياري)
   account: 'تسجيل الدخول',
+  myAccount: 'حسابي',
   // شاشة الدخول (أول شي بعد اللوقو)
   authTitle: 'هلا بك في DEAL Q8',
   authMine: 'دخول بحسابي',
