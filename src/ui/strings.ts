@@ -205,8 +205,9 @@ export const S = {
   handCard: (n: number) => `الكرت رقم ${n} باليد`,
   inColor: (color: string) => `بلون ${color}`,
   amount: (n: number) => `${n} دينار`,
-  burn: 'احرقه بالنار (بدون تنفيذ)',
-  discard: 'ارمه بالنار',
+  // خيار واحد بنفس الاسم: الكرت يروح للنار، سواء حرق بالدور أو رمي الزايد.
+  burn: 'احرقه بالنار',
+  discard: 'احرقه بالنار',
   respondWith: (card: string) => `رد بـ ${card}`,
   payer: (name: string) => `يدفع عني: ${name}`,
   cancelOnly: 'يلغي فقط',

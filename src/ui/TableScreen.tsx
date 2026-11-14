@@ -28,6 +28,7 @@ import { EndScreen } from './EndScreen';
 import { MoveWizard, PayModal } from './modals';
 import { S } from './strings';
 import { SET_COLORS, theme } from './theme';
+import { cardMoves } from './wizard';
 
 function bankTotal(player: PlayerState): number {
   return player.bank.reduce((sum, card) => sum + cardValue(card), 0);
@@ -194,12 +195,7 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastAttac
   };
 
   /** كل حركاتي اللي تخص كرت معيّن (باليد أو على الطاولة). */
-  const movesFor = (cardId: string): Move[] =>
-    myMoves.filter(
-      (move) =>
-        move.type !== 'respond' &&
-        (('cardId' in move && move.cardId === cardId) || (move.type === 'playRent' && move.doubleCardId === cardId)),
-    );
+  const movesFor = (cardId: string): Move[] => cardMoves(myMoves, cardId);
 
   // المقاسات: الكروت تتصغر حسب الشاشة وعدد الكروت باليد، وما تتراكب عشان كل كرت يبان كامل.
   const bottomHeight = Math.max(100, height * 0.36);

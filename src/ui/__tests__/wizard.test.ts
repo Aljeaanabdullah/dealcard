@@ -5,7 +5,7 @@ import { giveFullSet, place, placeAll, readyState } from '../../testing/helpers'
 import { LOCAL_NAMING } from '../describe';
 import { S } from '../strings';
 import { SET_COLORS } from '../theme';
-import { applyPicks, nextStep, type Pick, type Step } from '../wizard';
+import { applyPicks, cardMoves, nextStep, type Pick, type Step } from '../wizard';
 
 const ME = 0;
 
@@ -45,6 +45,31 @@ describe('أول خطوة: وش تسوي بالكرت', () => {
   it('كرت الإيجار اللي ما له لون عندي: ينحرق بالنار', () => {
     const game = readyState(['rent:rentYellowRed:1']);
     expect(labels(step(movesFor(game, 'rent:rentYellowRed:1'), [], game))).toEqual([S.burn]);
+  });
+});
+
+describe('الحرق بالنار خيار واحد', () => {
+  const eight = ['action:qarqash:1', 'money:1:1', 'money:1:2', 'money:1:3', 'money:1:4', 'money:1:5', 'money:1:6', 'money:1:7'];
+
+  it('يدي فوق 7 وباقي لي كروت ألعبها: كرت الأكشن له "العبه" و"احرقه بالنار" مرة وحدة بس', () => {
+    const game = place(readyState(eight), 'money:5:1', { zone: 'bank', seat: 1 });
+    const mine = legalMoves(game).filter((move) => move.seat === ME);
+    // المحرك يعطي حركتين بنفس المعنى: حرق ورمي
+    expect(mine.filter((m) => 'cardId' in m && m.cardId === 'action:qarqash:1').map((m) => m.type)).toEqual(
+      expect.arrayContaining(['burnAction', 'discard']),
+    );
+    const shown = labels(step(cardMoves(mine, 'action:qarqash:1'), [], game));
+    expect(shown).toEqual([S.playIt, S.burn]);
+    expect(shown.filter((label) => label === S.burn)).toHaveLength(1);
+  });
+
+  it('خلصت كروت دوري ويدي فوق 7: يبقى خيار واحد "احرقه بالنار"', () => {
+    const base = readyState(eight);
+    const game = { ...base, turn: { ...base.turn, playsUsed: 3 } };
+    const mine = legalMoves(game).filter((move) => move.seat === ME);
+    expect(labels(step(cardMoves(mine, 'action:qarqash:1'), [], game))).toEqual([S.burn]);
+    // والفلوس (ما تنحرق بالدور) تنرمي بنفس الاسم
+    expect(labels(step(cardMoves(mine, 'money:1:1'), [], game))).toEqual([S.burn]);
   });
 });
 
