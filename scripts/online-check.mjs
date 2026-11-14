@@ -116,4 +116,55 @@ const left = await b.call({ action: 'leave', code });
 check(left.ok, 'خروج لاعب من الغرفة');
 const after = await a.call({ action: 'view', code });
 check(after.snapshot.seats[1].isBot === true, 'البوت استلم مكان اللاعب اللي طلع');
+console.log('انتهت تجربة الغرفة الخاصة');
+
+// ---------------- اللعب العشوائي (المرحلة 9) ----------------
+console.log('اللعب العشوائي:');
+const r1 = await guest('R1');
+const r2 = await guest('R2');
+
+const first = await r1.call({ action: 'random', name: 'عشوائي 1' });
+check(first.ok && first.snapshot.status === 'lobby' && first.snapshot.matchmaking === true, 'أول لاعب يدخل الطابور وينتظر');
+check(first.snapshot.winTarget === 6, 'شرط الفوز الثابت 6 أطقم');
+const matchCode = first.snapshot.code;
+const openedAt = Date.now();
+
+const second = await r2.call({ action: 'random', name: 'عشوائي 2' });
+check(second.ok && second.snapshot.code === matchCode, 'اللاعب الثاني يدخل نفس الغرفة');
+check(second.snapshot.seats.length === 2, 'الغرفة فيها لاعبين');
+
+const again = await r1.call({ action: 'random', name: 'عشوائي 1' });
+check(again.ok && again.snapshot.code === matchCode && again.snapshot.seats.length === 2, 'الضغط مرة ثانية يرجّع لنفس الغرفة (ما يدخل مباراتين)');
+
+check((await r1.call({ action: 'setWinTarget', code: matchCode, winTarget: 8 })).error === 'fixedWinTarget', 'شرط الفوز ما يتغير بالعشوائي');
+check((await r1.call({ action: 'start', code: matchCode })).error === 'notHost', 'اللعبة ما تبدأ يدوياً بالعشوائي');
+
+// إلغاء البحث
+check((await r2.call({ action: 'leave', code: matchCode })).ok, 'اللاعب الثاني يلغي البحث');
+const afterCancel = await r1.call({ action: 'view', code: matchCode });
+check(afterCancel.snapshot.seats.length === 1, 'اللاعب اللي ألغى طلع من الطابور');
+
+// قبل 30 ثانية ما تبدأ
+const early = await r1.call({ action: 'tick', code: matchCode });
+check(early.snapshot.status === 'lobby', 'قبل 30 ثانية المباراة ما تبدأ');
+
+// ننتظر لين تخلص المهلة ثم نبضة
+const waitMs = Math.max(0, 31000 - (Date.now() - openedAt));
+console.log(`  ... ننتظر ${Math.round(waitMs / 1000)} ثانية لين تخلص مهلة الطابور`);
+await new Promise((resolve) => setTimeout(resolve, waitMs));
+const begun = await r1.call({ action: 'tick', code: matchCode });
+check(begun.ok && begun.snapshot.status === 'playing', 'بعد 30 ثانية المباراة تبدأ');
+check(begun.snapshot.seats.map((s) => s.isBot).join() === 'false,true,true,true', 'البوتات كملت العدد: لاعب واحد و3 بوتات');
+check(begun.snapshot.state.winTarget === 6, 'المباراة شرطها 6 أطقم');
+
+const during = await r1.call({ action: 'random', name: 'عشوائي 1' });
+check(during.ok && during.snapshot.code === matchCode && during.snapshot.status === 'playing', 'اللاعب اللي بمباراة يرجع لمباراته');
+
+// اللاعب اللي ألغى يدخل غرفة جديدة، مو المباراة اللي بدأت
+const fresh = await r2.call({ action: 'random', name: 'عشوائي 2' });
+check(fresh.ok && fresh.snapshot.code !== matchCode && fresh.snapshot.status === 'lobby', 'اللاعب الجديد تنفتح له غرفة جديدة');
+
+// تنظيف: نطلع من الغرف عشان ما تبقى معلّقة
+await r2.call({ action: 'leave', code: fresh.snapshot.code });
+await r1.call({ action: 'leave', code: matchCode });
 console.log('انتهت التجربة');

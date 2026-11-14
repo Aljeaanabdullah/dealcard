@@ -30,7 +30,7 @@ export function joinRandomMatch(
   if (current) return { ok: true, room: current, changed: false };
 
   const open = rooms
-    .filter(isOpenMatch)
+    .filter((room) => isOpenMatch(room, now))
     .sort((a, b) => (a.match?.openedAt ?? 0) - (b.match?.openedAt ?? 0))[0];
   const result = open ? joinMatchRoom(open, playerId, name, now) : createMatchRoom(newCode, playerId, name, seed, now);
   return result.ok ? { ok: true, room: result.room, changed: true } : result;

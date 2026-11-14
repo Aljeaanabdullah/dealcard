@@ -12,6 +12,7 @@ import {
   createRng,
   createRoom,
   generateRoomCode,
+  isOpenMatch,
   joinMatchRoom,
   joinRoom,
   leaveRoom,
@@ -20,7 +21,7 @@ import {
   startRoom,
   submitMove,
   tick,
-} from 'https://raw.githubusercontent.com/Aljeaanabdullah/dealcard/db725c8e0171807837b4fc28cf2686644b2d14bb/supabase/functions/_shared/game.js';
+} from 'https://raw.githubusercontent.com/Aljeaanabdullah/dealcard/1fd8b64849b2547aff2abd14a1c5a8c8af3e8776/supabase/functions/_shared/game.js';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -127,17 +128,17 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (mine) return json({ ok: true, snapshot: snapshotFor(mine.state, playerId) });
 
-      // أقدم غرفة عشوائية مفتوحة وفيها مكان.
-      const { data: open } = await admin
+      // أقدم غرفة عشوائية مفتوحة وفيها مكان. الغرف اللي خلصت مهلتها وما بدأت تنتجاهل.
+      const { data: candidates } = await admin
         .from('rooms')
         .select('state, version')
         .eq('matchmaking', true)
         .eq('status', 'lobby')
         .gt('seat_count', 0)
         .lt('seat_count', 4)
-        .order('updated_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .order('updated_at', { ascending: false })
+        .limit(10);
+      const open = (candidates ?? []).filter((row) => isOpenMatch(row.state, now)).pop();
 
       if (open) {
         const joined: ActionResult = joinMatchRoom(open.state, playerId, name, now);

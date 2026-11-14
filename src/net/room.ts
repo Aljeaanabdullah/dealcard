@@ -138,9 +138,15 @@ export function joinMatchRoom(room: Room, playerId: string, name: string, now: n
   return joined.room.seats.length >= PLAYER_COUNT ? begin(joined.room, room.match.seed, now) : joined;
 }
 
-/** غرفة لعب عشوائي تنتظر لاعبين وفيها مكان. الغرفة الفاضية (كلهم ألغوا) ما تنحسب. */
-export function isOpenMatch(room: Room): boolean {
-  return Boolean(room.match) && room.status === 'lobby' && room.seats.length > 0 && room.seats.length < PLAYER_COUNT;
+/**
+ * غرفة لعب عشوائي تنتظر لاعبين وفيها مكان.
+ * ما تنحسب: الغرفة الفاضية (كلهم ألغوا)، والغرفة اللي خلصت مهلتها وما بدأت
+ * (لاعبها سكّر التطبيق بدون ما يلغي، فما يدخل عليها لاعب جديد).
+ */
+export function isOpenMatch(room: Room, now: number): boolean {
+  if (!room.match || room.status !== 'lobby') return false;
+  if (room.seats.length === 0 || room.seats.length >= PLAYER_COUNT) return false;
+  return now < room.match.openedAt + MATCH_WAIT_SECONDS * 1000;
 }
 
 /** اللاعب داخل هالغرفة وهي ما انتهت (انتظار أو لعب). */

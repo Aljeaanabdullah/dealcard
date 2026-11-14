@@ -1610,8 +1610,10 @@ function joinMatchRoom(room, playerId, name, now) {
   if (!joined.ok) return joined;
   return joined.room.seats.length >= PLAYER_COUNT ? begin(joined.room, room.match.seed, now) : joined;
 }
-function isOpenMatch(room) {
-  return Boolean(room.match) && room.status === "lobby" && room.seats.length > 0 && room.seats.length < PLAYER_COUNT;
+function isOpenMatch(room, now) {
+  if (!room.match || room.status !== "lobby") return false;
+  if (room.seats.length === 0 || room.seats.length >= PLAYER_COUNT) return false;
+  return now < room.match.openedAt + MATCH_WAIT_SECONDS * 1e3;
 }
 function isActiveFor(room, playerId) {
   return room.status !== "finished" && seatOf(room, playerId) >= 0;

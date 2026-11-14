@@ -163,7 +163,7 @@ describe('طابور اللعب العشوائي', () => {
     const empty = server.roomOf(code);
     if (!empty) throw new Error('ما فيه غرفة');
     expect(empty.seats).toHaveLength(0);
-    expect(isOpenMatch(empty)).toBe(false);
+    expect(isOpenMatch(empty, now())).toBe(false);
     expect(tick(empty, now() + WAIT_MS * 10)).toBe(empty);
 
     // لاعب جديد تنفتح له غرفة جديدة بمهلة كاملة
@@ -201,6 +201,24 @@ describe('طابور اللعب العشوائي', () => {
     const [random] = await joinAll(server, ['a']);
     expect(random?.code).not.toBe(privateRoom.code);
     expect(server.roomOf(privateRoom.code)?.seats).toHaveLength(1);
+  });
+
+  it('غرفة خلصت مهلتها وما بدأت (لاعبها سكّر التطبيق): اللاعب الجديد ما يدخلها', async () => {
+    const { server, advance, now } = host();
+    const [ghost] = await joinAll(server, ['ghost']);
+    const stale = server.roomOf(ghost?.code ?? '');
+    if (!stale) throw new Error('ما فيه غرفة');
+
+    // قبل المهلة الغرفة مفتوحة، وبعدها لا
+    expect(isOpenMatch(stale, now() + WAIT_MS - 1)).toBe(true);
+    expect(isOpenMatch(stale, now() + WAIT_MS)).toBe(false);
+
+    // مرت دقيقتين وما أحد حرّك الغرفة: اللاعب الجديد تنفتح له غرفة جديدة
+    advance(120000);
+    const [fresh] = await joinAll(server, ['new']);
+    expect(fresh?.code).not.toBe(ghost?.code);
+    expect(fresh?.matchDeadline).toBe(now() + WAIT_MS);
+    expect(server.roomOf(ghost?.code ?? '')?.seats.map((s) => s.playerId)).toEqual(['ghost']);
   });
 
   it('بدون اسم ينرفض', async () => {
