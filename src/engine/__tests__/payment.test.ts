@@ -431,13 +431,71 @@ describe('المباني', () => {
     expect(
       errorOf(applyMove(state, { type: 'placeBuilding', seat: ME, cardId: 'building:resort:1', color: 'red' })),
     ).toBe('setNotComplete');
+    // (الإصدار 1.8: المبنى ينتقل من طقم لطقم، فالرفض هنا لأنه أصلاً على نفس الطقم)
     expect(
       errorOf(applyMove(state, { type: 'placeBuilding', seat: ME, cardId: 'building:plot:1', color: 'darkBlue' })),
-    ).toBe('buildingNotLoose');
+    ).toBe('sameColor');
 
     state = must(applyMove(state, { type: 'placeBuilding', seat: ME, cardId: 'building:resort:1', color: 'darkBlue' }));
     expect(state.turn.playsUsed).toBe(1);
     expect(rentFor(player(state, ME), 'darkBlue')).toBe(8 + 3 + 5);
+  });
+
+  it('المبنى ينلعب جنب البنك بدون طقم حتى لو ما عندي طقم كامل، وبدون تأثير', () => {
+    let state = place(readyState(['building:plot:1']), 'property:brown:1', { zone: 'properties', seat: ME, color: 'brown' });
+    state = must(applyMove(state, { type: 'playBuilding', seat: ME, cardId: 'building:plot:1' }));
+    expect(player(state, ME).buildings).toEqual([
+      { card: { id: 'building:plot:1', kind: 'building', building: 'plot' }, color: null },
+    ]);
+    expect(player(state, ME).hand).toHaveLength(0);
+    expect(state.turn.playsUsed).toBe(1);
+    expect(rentFor(player(state, ME), 'brown')).toBe(1);
+    expect132(state);
+  });
+
+  it('لما يصير عندي طقم كامل آخذ المبنى من جنب البنك وأحطه عليه', () => {
+    let state = place(readyState(['property:brown:2']), 'property:brown:1', { zone: 'properties', seat: ME, color: 'brown' });
+    state = place(state, 'building:plot:1', { zone: 'buildings', seat: ME, color: null });
+    expect(legalMoves(state).some((m) => m.type === 'placeBuilding')).toBe(false);
+
+    state = must(applyMove(state, { type: 'playProperty', seat: ME, cardId: 'property:brown:2' }));
+    state = must(applyMove(state, { type: 'placeBuilding', seat: ME, cardId: 'building:plot:1', color: 'brown' }));
+    expect(rentFor(player(state, ME), 'brown')).toBe(2 + 3);
+    expect(state.turn.playsUsed).toBe(2);
+  });
+
+  it('المبنى ينتقل من طقم كامل لطقم كامل ثاني، وينحسب من الـ3 كروت', () => {
+    let state = giveFullSet(giveFullSet(readyState([]), ME, 'brown'), ME, 'darkBlue');
+    state = place(state, 'building:resort:1', { zone: 'buildings', seat: ME, color: 'brown' });
+    expect(rentFor(player(state, ME), 'brown')).toBe(2 + 5);
+
+    state = must(applyMove(state, { type: 'placeBuilding', seat: ME, cardId: 'building:resort:1', color: 'darkBlue' }));
+    expect(rentFor(player(state, ME), 'brown')).toBe(2);
+    expect(rentFor(player(state, ME), 'darkBlue')).toBe(8 + 5);
+    expect(state.turn.playsUsed).toBe(1);
+    expect132(state);
+  });
+
+  it('نقل المبنى ينرفض: على طقم ناقص، مبنى مو على طاولتي، أو إذا خلصت الـ3 كروت', () => {
+    let state = giveFullSet(giveFullSet(readyState([]), ME, 'brown'), ME, 'darkBlue');
+    state = place(state, 'building:resort:1', { zone: 'buildings', seat: ME, color: 'brown' });
+    state = place(state, 'building:plot:1', { zone: 'buildings', seat: 1, color: null });
+    expect(errorOf(applyMove(state, { type: 'placeBuilding', seat: ME, cardId: 'building:resort:1', color: 'red' }))).toBe(
+      'setNotComplete',
+    );
+    expect(errorOf(applyMove(state, { type: 'placeBuilding', seat: ME, cardId: 'building:plot:1', color: 'brown' }))).toBe(
+      'buildingNotOnTable',
+    );
+    expect(
+      errorOf(
+        applyMove(setTurn(state, { playsUsed: 3 }), {
+          type: 'placeBuilding',
+          seat: ME,
+          cardId: 'building:resort:1',
+          color: 'darkBlue',
+        }),
+      ),
+    ).toBe('noPlaysLeft');
   });
 
   it('لعب المبنى وإرجاعه ينرفض إذا خلصت الـ3 كروت', () => {

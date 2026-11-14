@@ -31,6 +31,17 @@ function press(root: ReactTestInstance, prefix: string, index = 0): boolean {
   return true;
 }
 
+/** يكمل أي نافذة مفتوحة: تأكيد، أو أول خيار، أو دفع تلقائي. */
+function resolveModal(root: ReactTestInstance): boolean {
+  if (press(root, 'option-confirm')) return true;
+  if (press(root, 'option-0')) return true;
+  if (press(root, 'pay-auto')) {
+    press(root, 'pay-confirm');
+    return true;
+  }
+  return false;
+}
+
 function hasText(root: ReactTestInstance, text: string): boolean {
   return root.findAll((node) => typeof node.type === 'string' && node.children.some((child) => child === text)).length > 0;
 }
@@ -45,11 +56,16 @@ function startGame(seed: number): ReactTestRenderer {
   jest.spyOn(Date, 'now').mockReturnValue(seed);
   let renderer: ReactTestRenderer | undefined;
   act(() => {
-    renderer = create(<App />);
+    renderer = create(<App transport={null} />);
   });
   if (!renderer) throw new Error('التطبيق ما انعرض');
-  expect(hasText(renderer.root, S.appName)).toBe(true);
-  expect(press(renderer.root, 'start-go')).toBe(true);
+  const root = renderer.root;
+  expect(hasText(root, S.appName)).toBe(true);
+  // أول ما ينفتح التطبيق يطلب الاسم؛ نسكر النافذة ونلعب ضد البوتات.
+  expect(hasText(root, S.enterName)).toBe(true);
+  expect(press(root, 'dialog-close')).toBe(true);
+  expect(press(root, 'home-bots')).toBe(true);
+  expect(press(root, 'start-go')).toBe(true);
   return renderer;
 }
 
@@ -57,7 +73,7 @@ function startGame(seed: number): ReactTestRenderer {
 function waitForMyDraw(root: ReactTestInstance): void {
   for (let i = 0; i < 400 && pressables(root, 'draw').length === 0; i++) {
     // أي نافذة تطلع لي بدور البوتات: أرد بأول خيار أو أدفع تلقائياً
-    if (!press(root, 'option-0') && press(root, 'pay-auto')) press(root, 'pay-confirm');
+    resolveModal(root);
     advance(800);
   }
   expect(pressables(root, 'draw').length).toBe(1);
@@ -73,7 +89,21 @@ afterEach(() => {
 });
 
 describe('واجهة اللعب ضد البوتات', () => {
-  it('شاشة البداية تفتح، واللعبة تبدأ والطاولة تنعرض', () => {
+  it('الشاشة الرئيسية تفتح بأربع بطاقات، واللعبة تبدأ والطاولة تنعرض', () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1001);
+    let home: ReactTestRenderer | undefined;
+    act(() => {
+      home = create(<App transport={null} />);
+    });
+    if (!home) throw new Error('التطبيق ما انعرض');
+    for (const title of [S.randomPlay, S.createRoom, S.joinTitle, S.playVsBots]) {
+      expect(hasText(home.root, title)).toBe(true);
+    }
+    // لعب عشوائي ما انبنى بعد: معطل ومكتوب عليه قريباً
+    expect(pressables(home.root, 'home-random')).toHaveLength(0);
+    expect(hasText(home.root, S.soon)).toBe(true);
+    act(() => home?.unmount());
+
     const renderer = startGame(1001);
     const root = renderer.root;
     expect(hasText(root, S.drawPile)).toBe(true);
@@ -105,16 +135,16 @@ describe('واجهة اللعب ضد البوتات', () => {
     }
     expect(played).toBe(true);
 
-    // أكمل أي نافذة انفتحت (اختيار هدف)، ثم أنهي الدور
-    for (let i = 0; i < 6 && pressables(root, 'option-0').length > 0; i++) press(root, 'option-0');
-    for (let i = 0; i < 40 && pressables(root, 'end-turn').length === 0; i++) {
-      if (!press(root, 'option-0') && press(root, 'pay-auto')) press(root, 'pay-confirm');
+    // أكمل أي نافذة انفتحت (اختيار هدف وتأكيد)، ثم أنهي الدور
+    for (let i = 0; i < 8 && resolveModal(root); i++) advance(100);
+    for (let i = 0; i < 40 && pressables(root, 'end-turn').length === 0 && hasText(root, S.yourTurn); i++) {
+      resolveModal(root);
       advance(800);
     }
     // إذا يدي فوق 7 أرمي الزايد أول
-    for (let i = 0; i < 6 && !press(root, 'end-turn'); i++) {
+    for (let i = 0; i < 6 && hasText(root, S.yourTurn) && !press(root, 'end-turn'); i++) {
       press(root, 'hand-', i);
-      if (!press(root, 'option-0')) press(root, 'option-cancel');
+      if (!resolveModal(root)) press(root, 'option-cancel');
     }
     advance(800);
     expect(hasText(root, S.yourTurn)).toBe(false);
@@ -146,12 +176,10 @@ describe('واجهة اللعب ضد البوتات', () => {
     for (let step = 0; step < 600 && !finished; step++) {
       if (pressables(root, 'replay').length > 0) {
         finished = true;
-      } else if (press(root, 'option-0')) {
-        // خيار بنافذة (حركة أو رد أو اختيار هدف)
+      } else if (resolveModal(root)) {
+        // خيار بنافذة (حركة أو رد أو اختيار هدف أو دفع)
       } else if (press(root, 'option-cancel')) {
         // كرت ما له لعبة
-      } else if (press(root, 'pay-auto')) {
-        press(root, 'pay-confirm');
       } else if (press(root, 'draw')) {
         myTurns++;
         tries = 0;
@@ -168,9 +196,9 @@ describe('واجهة اللعب ضد البوتات', () => {
     expect(myTurns).toBeGreaterThan(3);
     if (finished) {
       expect(hasText(root, S.summary)).toBe(true);
-      // إعادة اللعب ترجع لشاشة البداية
+      // إعادة اللعب ترجع للشاشة الرئيسية
       press(root, 'replay');
-      expect(pressables(root, 'start-go').length).toBe(1);
+      expect(hasText(root, S.playVsBots)).toBe(true);
     }
     act(() => renderer.unmount());
   });

@@ -870,7 +870,7 @@ function burnAction(state, seat, cardId) {
   const player = getPlayer(state, seat);
   const card = player.hand.find((c) => c.id === cardId);
   if (!card) return fail("cardNotInHand");
-  if (card.kind !== "action") return fail("wrongCardKind");
+  if (card.kind !== "action" && card.kind !== "rent") return fail("wrongCardKind");
   return done(
     withPlayer(
       { ...countPlay(state), firePile: [...state.firePile, card] },
@@ -885,12 +885,12 @@ function playBuilding(state, seat, cardId, color) {
   const card = player.hand.find((c) => c.id === cardId);
   if (!card) return fail("cardNotInHand");
   if (card.kind !== "building") return fail("wrongCardKind");
-  if (!isSetComplete(player.properties, color)) return fail("setNotComplete");
+  if (color !== void 0 && !isSetComplete(player.properties, color)) return fail("setNotComplete");
   return done(
     withPlayer(countPlay(state), {
       ...player,
       hand: player.hand.filter((c) => c.id !== cardId),
-      buildings: [...player.buildings, { card, color }]
+      buildings: [...player.buildings, { card, color: color ?? null }]
     })
   );
 }
@@ -899,7 +899,8 @@ function placeBuilding(state, seat, cardId, color) {
   if (blocked) return fail(blocked);
   const player = getPlayer(state, seat);
   const placed = player.buildings.find((b) => b.card.id === cardId);
-  if (!placed || placed.color !== null) return fail("buildingNotLoose");
+  if (!placed) return fail("buildingNotOnTable");
+  if (placed.color === color) return fail("sameColor");
   if (!isSetComplete(player.properties, color)) return fail("setNotComplete");
   return done(
     withPlayer(countPlay(state), {
@@ -1137,10 +1138,12 @@ function legalMoves(state) {
           moves.push({ type: "playJoker", seat, cardId: card.id, color: color.id });
         }
       } else if (card.kind === "building") {
+        moves.push({ type: "playBuilding", seat, cardId: card.id });
         for (const color of complete) {
           moves.push({ type: "playBuilding", seat, cardId: card.id, color });
         }
       } else if (card.kind === "rent") {
+        moves.push({ type: "burnAction", seat, cardId: card.id });
         const def = RENTS.find((d) => d.id === card.rent);
         if (!def) continue;
         const colors = def.colors === "any" ? COLORS.map((c) => c.id) : def.colors;
@@ -1174,9 +1177,10 @@ function legalMoves(state) {
       }
     }
     for (const building of player.buildings) {
-      if (building.color !== null) continue;
       for (const color of complete) {
-        moves.push({ type: "placeBuilding", seat, cardId: building.card.id, color });
+        if (color !== building.color) {
+          moves.push({ type: "placeBuilding", seat, cardId: building.card.id, color });
+        }
       }
     }
   }
@@ -1333,9 +1337,11 @@ function scoreTurnMove(state, seat, move) {
       return completeColors(moved).length > completeColors(me.properties).length ? 85 : -1;
     }
     case "playBuilding":
-      return 80;
-    case "placeBuilding":
-      return 70;
+      return move.color !== void 0 ? 80 : 3;
+    case "placeBuilding": {
+      const placed = me.buildings.find((b) => b.card.id === move.cardId);
+      return placed && placed.color === null ? 70 : -1;
+    }
     case "bankMoney": {
       const card = me.hand.find((c) => c.id === move.cardId);
       return 60 + (card ? cardValue(card) / 100 : 0);
@@ -1574,6 +1580,7 @@ function createRoom(code, hostId, name) {
       seats: [{ playerId: hostId, name: name.trim(), isBot: false, connected: true }],
       game: null,
       lastMove: null,
+      lastAttack: null,
       lastMoveAt: 0,
       turnDeadline: 0,
       botSeed: 0
@@ -1614,6 +1621,7 @@ function startRoom(room, playerId, seed, now) {
       seats,
       game,
       lastMove: null,
+      lastAttack: null,
       lastMoveAt: now,
       turnDeadline: now + TURN_SECONDS * 1e3,
       botSeed: nextSeed(rng)
@@ -1632,6 +1640,7 @@ function applyToRoom(room, game, move, now) {
       game: next,
       status: next.winner !== null ? "finished" : "playing",
       lastMove: move,
+      lastAttack: move.type === "playAction" || move.type === "playRent" ? move : move.type === "endTurn" ? null : room.lastAttack,
       lastMoveAt: now,
       turnDeadline: turnChanged ? now + TURN_SECONDS * 1e3 : room.turnDeadline
     }
@@ -1681,6 +1690,7 @@ function tick(room, now) {
       return withSeed({
         ...room,
         game: ended,
+        lastAttack: null,
         lastMove: { type: "endTurn", seat: game.turn.seat },
         lastMoveAt: now,
         turnDeadline: now + TURN_SECONDS * 1e3
@@ -1711,6 +1721,7 @@ function snapshotFor(room, playerId) {
     state: game ? maskStateFor(game, mySeat) : null,
     moves: game ? legalMoves(game).filter((move) => move.seat === mySeat) : [],
     lastMove: room.lastMove,
+    lastAttack: room.lastAttack ?? null,
     turnDeadline: room.turnDeadline
   };
 }

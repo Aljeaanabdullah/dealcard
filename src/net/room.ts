@@ -34,6 +34,8 @@ export interface Room {
   readonly game: GameState | null;
   /** آخر حركة انلعبت (معلومة مكشوفة للجميع) */
   readonly lastMove: Move | null;
+  /** آخر أكشن أو إيجار انلعب بهذا الدور (لسهم المستهدف ونوافذ الرد والدفع)، ينمسح بنهاية الدور */
+  readonly lastAttack: Move | null;
   /** وقت آخر حركة بالملي ثانية */
   readonly lastMoveAt: number;
   /** موعد انتهاء الدور الحالي بالملي ثانية (المؤقت على الخادم) */
@@ -87,6 +89,7 @@ export function createRoom(code: string, hostId: string, name: string): RoomResu
       seats: [{ playerId: hostId, name: name.trim(), isBot: false, connected: true }],
       game: null,
       lastMove: null,
+      lastAttack: null,
       lastMoveAt: 0,
       turnDeadline: 0,
       botSeed: 0,
@@ -133,6 +136,7 @@ export function startRoom(room: Room, playerId: string, seed: number, now: numbe
       seats,
       game,
       lastMove: null,
+      lastAttack: null,
       lastMoveAt: now,
       turnDeadline: now + TURN_SECONDS * 1000,
       botSeed: nextSeed(rng),
@@ -153,6 +157,8 @@ function applyToRoom(room: Room, game: GameState, move: Move, now: number): Room
       game: next,
       status: next.winner !== null ? 'finished' : 'playing',
       lastMove: move,
+      lastAttack:
+        move.type === 'playAction' || move.type === 'playRent' ? move : move.type === 'endTurn' ? null : room.lastAttack,
       lastMoveAt: now,
       turnDeadline: turnChanged ? now + TURN_SECONDS * 1000 : room.turnDeadline,
     },
@@ -219,6 +225,7 @@ export function tick(room: Room, now: number): Room {
       return withSeed({
         ...room,
         game: ended,
+        lastAttack: null,
         lastMove: { type: 'endTurn', seat: game.turn.seat },
         lastMoveAt: now,
         turnDeadline: now + TURN_SECONDS * 1000,
@@ -250,6 +257,7 @@ export interface RoomSnapshot {
   /** حركاتي القانونية الحين (يحسبها الخادم) */
   readonly moves: readonly Move[];
   readonly lastMove: Move | null;
+  readonly lastAttack: Move | null;
   readonly turnDeadline: number;
 }
 
@@ -267,6 +275,7 @@ export function snapshotFor(room: Room, playerId: string): RoomSnapshot | null {
     state: game ? maskStateFor(game, mySeat) : null,
     moves: game ? legalMoves(game).filter((move) => move.seat === mySeat) : [],
     lastMove: room.lastMove,
+    lastAttack: room.lastAttack ?? null,
     turnDeadline: room.turnDeadline,
   };
 }

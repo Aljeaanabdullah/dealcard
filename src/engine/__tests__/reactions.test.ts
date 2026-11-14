@@ -284,6 +284,39 @@ describe('فزعه', () => {
     expect132(state);
   });
 
+  it('فزعه ضد العيادي: يلغيه عن اللاعب اللي فزعت له فقط، وما يحمّلني دفعه (أدفع نصيبي أنا بس)', () => {
+    // بوت 1 يلعب العيادي على الكل. أنا (المقعد 0) بيدي فزعه وأفزع للمقعد 2.
+    let state = readyState([]);
+    state = { ...state, turn: { seat: 1, hasDrawn: true, playsUsed: 0, discarding: false } };
+    state = place(state, 'action:eyadi:1', { zone: 'hand', seat: 1 });
+    state = place(state, 'action:fazaah:1', { zone: 'hand', seat: ME });
+    for (const [seat, cardId] of [
+      [ME, 'money:5:1'],
+      [2, 'money:5:2'],
+      [3, 'money:5:3'],
+    ] as const) {
+      state = place(state, cardId, { zone: 'bank', seat });
+    }
+    state = must(applyMove(state, { type: 'playAction', seat: 1, cardId: 'action:eyadi:1' }));
+
+    // العيادي عليّ أنا أول: ما أقدر أفزع لنفسي، فدَيني ينضاف مباشرة (ديناريين عن نفسي)
+    expect(state.pending).toEqual({ to: 1, debts: [{ from: ME, amount: 2 }] });
+    // ثم نافذة المقعد 2: أنا أفزع له
+    expect(state.response?.effect.target).toBe(2);
+    state = must(applyMove(state, { type: 'respond', seat: ME, cardId: 'action:fazaah:1' }));
+
+    // المقعد 2 انلغى عنه، والمقعد 3 يدفع نصيبه. أنا عليّ دَين واحد بس (نصيبي)، مو دَينين.
+    expect(state.pending).toEqual({
+      to: 1,
+      debts: [
+        { from: ME, amount: 2 },
+        { from: 3, amount: 2 },
+      ],
+    });
+    expect(state.pending?.debts.filter((d) => d.from === ME)).toHaveLength(1);
+    expect(state.pending?.debts.some((d) => d.from === 2)).toBe(false);
+  });
+
   it('ما ينلعب إذا أنت المستهدف أو أنت صاحب الأكشن', () => {
     // المستهدف بيده فزعه بس: ما تنفتح له نافذة والأكشن يتنفذ
     expect(qarqashOnSeat1({ 1: ['action:fazaah:1'] }).pending).toEqual(DEBT_5);
@@ -583,7 +616,7 @@ describe('1000 مباراة عشوائية بكل الكروت', () => {
     for (let seed = 1; seed <= 1000; seed++) {
       const rng = createRng(seed * 7919);
       let state = createGame(seed, seed % 2 === 0 ? 6 : 8);
-      for (let i = 0; i < 8000 && state.winner === null; i++) {
+      for (let i = 0; i < 25000 && state.winner === null; i++) {
         const moves = legalMoves(state);
         if (moves.length === 0) throw new Error(`ما فيه حركة قانونية: بذرة ${seed} حركة ${i}`);
         const move = moves[randomInt(rng, moves.length)] as Move;

@@ -169,9 +169,13 @@ function scoreTurnMove(state: GameState, seat: number, move: Move): number {
       return completeColors(moved).length > completeColors(me.properties).length ? 85 : -1;
     }
     case 'playBuilding':
-      return 80;
-    case 'placeBuilding':
-      return 70;
+      // على طقم كامل أفضل. جنب البنك أحسن من بقائه باليد (يصير ينحط على طقم بعدين، ويندفع فيه).
+      return move.color !== undefined ? 80 : 3;
+    case 'placeBuilding': {
+      // ينقل المبنى اللي بدون طقم فقط؛ ما يلف المباني بين الأطقم.
+      const placed = me.buildings.find((b) => b.card.id === move.cardId);
+      return placed && placed.color === null ? 70 : -1;
+    }
     case 'bankMoney': {
       const card = me.hand.find((c) => c.id === move.cardId);
       return 60 + (card ? cardValue(card) / 100 : 0);
@@ -285,7 +289,7 @@ function deadCardIds(state: GameState, seat: number): Set<string> {
 function adjustForDeadCards(state: GameState, seat: number, move: Move, score: number, dead: Set<string>): number {
   const me = getPlayer(state, seat);
   if (move.type === 'burnAction' && dead.has(move.cardId) && me.hand.length >= 5) {
-    // يحرق كرت الأكشن الميت إذا ما عنده لعبة أفضل.
+    // يحرق كرت الأكشن أو الإيجار الميت إذا ما عنده لعبة أفضل.
     return 1;
   }
   if (move.type === 'discard' && dead.has(move.cardId)) {
@@ -294,7 +298,7 @@ function adjustForDeadCards(state: GameState, seat: number, move: Move, score: n
     return -0.05 - (card ? keepValue(card) : 0) / 100000;
   }
   if (move.type === 'bankMoney' && me.hand.length > 7) {
-    // كرت الإيجار الميت ما ينحرق: يطلع بالرمي آخر الدور، فالبوت يخلي يده فوق 7 عشان يرميه.
+    // إذا يده فوق 7 وفيها إيجار ميت، يرميه بدل ما يحط فلوس.
     const hasDeadRent = me.hand.some((c) => c.kind === 'rent' && dead.has(c.id));
     if (hasDeadRent) return -0.2;
   }

@@ -6,9 +6,10 @@ import { buildDeck, type Card } from '../../data/cards';
 import { legalMoves, type Move } from '../../engine/moves';
 import type { GameState } from '../../engine/state';
 import { maskStateFor } from '../../net/mask';
-import { place, readyState, setTurn } from '../../testing/helpers';
+import { giveFullSet, place, readyState, setTurn } from '../../testing/helpers';
 import { cardInfo, LOCAL_NAMING, moveTargets } from '../describe';
 import { TableScreen } from '../TableScreen';
+import { S } from '../strings';
 import { SET_COLORS } from '../theme';
 
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
@@ -19,7 +20,7 @@ function card(id: string): Card {
   return found;
 }
 
-function render(game: GameState, lastMove: Move | null, onMove: (move: Move) => void): ReactTestRenderer {
+function render(game: GameState, lastAttack: Move | null, onMove: (move: Move) => void): ReactTestRenderer {
   let renderer: ReactTestRenderer | undefined;
   act(() => {
     renderer = create(
@@ -29,7 +30,7 @@ function render(game: GameState, lastMove: Move | null, onMove: (move: Move) => 
         naming={LOCAL_NAMING}
         secondsLeft={60}
         event=""
-        lastMove={lastMove}
+        lastAttack={lastAttack}
         onMove={onMove}
         onPlayAgain={() => undefined}
       />,
@@ -37,6 +38,23 @@ function render(game: GameState, lastMove: Move | null, onMove: (move: Move) => 
   });
   if (!renderer) throw new Error('الطاولة ما انعرضت');
   return renderer;
+}
+
+/** معرّفات العناصر المعروضة اللي تبدأ ببادئة معيّنة. */
+function ids(renderer: ReactTestRenderer, prefix: string, keepDuplicates = false): string[] {
+  const found = renderer.root
+    .findAll((node) => typeof node.type === 'string' && typeof node.props.testID === 'string')
+    .map((node) => node.props.testID as string)
+    .filter((id) => id.startsWith(prefix));
+  return keepDuplicates ? found : [...new Set(found)].sort();
+}
+
+/** كل النصوص المعروضة. */
+function texts(renderer: ReactTestRenderer): string[] {
+  return renderer.root
+    .findAll((node) => typeof node.type === 'string')
+    .map((node) => node.children.filter((child): child is string => typeof child === 'string').join(''))
+    .filter((text) => text.length > 0);
 }
 
 function targetedSeats(renderer: ReactTestRenderer): string[] {
@@ -186,6 +204,57 @@ describe('سهم على اللاعب المستهدف', () => {
   it('ما فيه سهم إذا آخر حركة ما لها مستهدف', () => {
     const renderer = render(setTurn(readyState([]), { seat: 1 }), { type: 'draw', seat: 1 }, () => undefined);
     expect(targetedSeats(renderer)).toEqual([]);
+    expect(ids(renderer, 'attack-banner')).toHaveLength(0);
     act(() => renderer.unmount());
+  });
+
+  it('السهم مزدوج: على اللاعب المستهدف، وبوسط الطاولة مكتوب مين لعب وش على مين', () => {
+    const game = setTurn(readyState([]), { seat: 1 });
+    const renderer = render(game, { type: 'playAction', seat: 1, cardId: 'action:qarqash:1', targetSeat: 3 }, () => undefined);
+    expect(targetedSeats(renderer)).toEqual(['targeted-3']);
+    expect(ids(renderer, 'attack-banner')).toHaveLength(1);
+    expect(texts(renderer)).toContain(S.attackBanner(S.bot(1), 'قرقش', S.bot(3)));
+    act(() => renderer.unmount());
+  });
+});
+
+describe('معلومات اللاعبين على الطاولة', () => {
+  it('كل لاعب ضدي يبين عنده عدد أطقمه الكاملة', () => {
+    let game = giveFullSet(giveFullSet(readyState([]), 2, 'brown'), 2, 'darkBlue');
+    game = giveFullSet(game, 3, 'pistachio');
+    const renderer = render(game, null, () => undefined);
+    const shown = texts(renderer);
+    expect(shown.filter((text) => text === S.setsShort(2))).toHaveLength(1);
+    expect(shown.filter((text) => text === S.setsShort(1))).toHaveLength(1);
+    expect(shown.filter((text) => text === S.setsShort(0))).toHaveLength(1);
+    act(() => renderer.unmount());
+  });
+
+  it('استريح وحصانه ينكتبون كبار على اللاعب لين يخلصون', () => {
+    const base = readyState([]);
+    const game: GameState = { ...base, skips: [2, 3, 3], immune: [1] };
+    const renderer = render(game, null, () => undefined);
+    expect(ids(renderer, 'badge-skip-')).toEqual(['badge-skip-2', 'badge-skip-3']);
+    expect(ids(renderer, 'badge-immune-')).toEqual(['badge-immune-1']);
+    const shown = texts(renderer);
+    expect(shown).toContain(S.skipped);
+    expect(shown).toContain(S.skippedTimes(2));
+    expect(shown).toContain(S.immune);
+    act(() => renderer.unmount());
+
+    // بدون استريح ولا حصانه ما فيه علامات
+    const clean = render(base, null, () => undefined);
+    expect(ids(clean, 'badge-')).toEqual([]);
+    act(() => clean.unmount());
+  });
+
+  it('عدّاد الكروت الملعوبة: دائرة تتعبى مع كل كرت، وأربع دوائر مع زايد لعبه', () => {
+    const two = render(setTurn(readyState(['money:1:1']), { playsUsed: 2 }), null, () => undefined);
+    expect(ids(two, 'play-dot-', true)).toEqual(['play-dot-on', 'play-dot-on', 'play-dot-off']);
+    act(() => two.unmount());
+
+    const extra = render({ ...setTurn(readyState(['money:1:1']), { playsUsed: 1 }), extraPlays: 1 }, null, () => undefined);
+    expect(ids(extra, 'play-dot-', true)).toEqual(['play-dot-on', 'play-dot-off', 'play-dot-off', 'play-dot-off']);
+    act(() => extra.unmount());
   });
 });

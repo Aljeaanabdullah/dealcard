@@ -1,21 +1,31 @@
 // طاولة اللعب بالعرض: يدك بالأسفل، لاعب مقابلك بالأعلى ولاعب على كل جانب،
-// شاشة عرض فقط: تاخذ الحالة (بعد إخفاء أيدي الباقين) وحركاتي القانونية، وتخدم اللعب المحلي والأونلاين.
 // وكومة السحب والنار بالوسط — prd.md القسم 7، والشكل من design/Main.dc.html
+// شاشة عرض فقط: تاخذ الحالة (بعد إخفاء أيدي الباقين) وحركاتي القانونية، وتخدم اللعب المحلي والأونلاين.
 
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import type { Card } from '../data/cards';
 import { COLORS } from '../data/colors';
-import { MAX_HAND_SIZE, MAX_PLAYS_PER_TURN, PLAYER_COUNT } from '../data/rules';
+import { MAX_HAND_SIZE, MAX_PLAYS_PER_TURN, PLAYER_COUNT, TURN_SECONDS } from '../data/rules';
 import type { Move } from '../engine/moves';
 import { cardValue } from '../engine/payment';
 import { completeColors, countInColor, isSetComplete } from '../engine/sets';
 import type { GameState, PlayerState } from '../engine/state';
 import { CardBack, CardView } from './CardView';
-import { cardInfo, colorName, describeEffect, moveTargets, seatName, type Naming } from './describe';
+import {
+  attackCard,
+  cardById,
+  cardInfo,
+  colorName,
+  describeEffect,
+  moveTargets,
+  seatName,
+  type Naming,
+} from './describe';
 import { EndScreen } from './EndScreen';
-import { OptionsModal, PayModal } from './modals';
+import { MoveWizard, PayModal } from './modals';
 import { S } from './strings';
 import { SET_COLORS, theme } from './theme';
 
@@ -43,6 +53,48 @@ function SetChips({ player }: { readonly player: PlayerState }) {
   );
 }
 
+/** سهم أحمر: على اللاعب اللي انلعب ضده الكرت، وبوسط الطاولة. */
+function Arrow({ size }: { readonly size: number }) {
+  return (
+    <View
+      style={[
+        styles.arrow,
+        { borderTopWidth: size * 0.6, borderBottomWidth: size * 0.6, borderLeftWidth: size },
+      ]}
+    />
+  );
+}
+
+function TargetArrow() {
+  return (
+    <View style={styles.arrowRow} accessibilityLabel={S.targeted}>
+      <Arrow size={10} />
+      <Text style={styles.arrowText}>{S.targeted}</Text>
+    </View>
+  );
+}
+
+/** علامة كبيرة على اللاعب: "استريح" لين يخلص تفويته، و"حصانه" لين يرجع دوره. */
+function StatusBadges({ game, seat }: { readonly game: GameState; readonly seat: number }) {
+  const skips = game.skips.filter((skipped) => skipped === seat).length;
+  const immune = game.immune.includes(seat);
+  if (skips === 0 && !immune) return null;
+  return (
+    <View style={styles.badges}>
+      {skips > 0 ? (
+        <View testID={`badge-skip-${seat}`} style={[styles.badge, styles.badgeSkip]}>
+          <Text style={styles.badgeText}>{skips > 1 ? S.skippedTimes(skips) : S.skipped}</Text>
+        </View>
+      ) : null}
+      {immune ? (
+        <View testID={`badge-immune-${seat}`} style={[styles.badge, styles.badgeImmune]}>
+          <Text style={[styles.badgeText, styles.badgeTextDark]}>{S.immune}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function OpponentPanel({
   game,
   seat,
@@ -66,28 +118,20 @@ function OpponentPanel({
       testID={targeted ? `targeted-${seat}` : undefined}
       style={[styles.panel, row ? styles.panelRow : styles.panelColumn, active && styles.panelActive, targeted && styles.panelTargeted]}
     >
-      {targeted ? <TargetArrow /> : null}
-      <View>
-        <Text style={styles.name}>
-          {seatName(seat, naming)}
-          {game.immune.includes(seat) ? ` · ${S.immune}` : ''}
-          {game.skips.includes(seat) ? ` · ${S.skipped}` : ''}
-        </Text>
+      <View style={styles.info}>
+        {targeted ? <TargetArrow /> : null}
+        <Text style={styles.name}>{seatName(seat, naming)}</Text>
         <Text style={styles.small}>
           {S.inHand(player.hand.length)} · {S.bank(bankTotal(player))}
         </Text>
+        <Text testID={`sets-${seat}`} style={styles.sets}>
+          {S.setsShort(completeColors(player.properties).length)}
+        </Text>
       </View>
-      <SetChips player={player} />
-    </View>
-  );
-}
-
-/** سهم على اللاعب اللي انلعب ضده الكرت. */
-function TargetArrow() {
-  return (
-    <View style={styles.arrowRow} accessibilityLabel={S.targeted}>
-      <View style={styles.arrow} />
-      <Text style={styles.arrowText}>{S.targeted}</Text>
+      <View style={styles.info}>
+        <StatusBadges game={game} seat={seat} />
+        <SetChips player={player} />
+      </View>
     </View>
   );
 }
@@ -103,51 +147,50 @@ interface TableScreenProps {
   readonly naming: Naming;
   readonly secondsLeft: number;
   readonly event: string;
-  /** آخر حركة انلعبت: يتحدد منها مين انلعب ضده الكرت */
-  readonly lastMove: Move | null;
+  /** آخر أكشن أو إيجار انلعب بهذا الدور: يتحدد منه مين انلعب ضده الكرت */
+  readonly lastAttack: Move | null;
   readonly onMove: (move: Move) => void;
   readonly onPlayAgain: () => void;
 }
 
-export function TableScreen({ game, moves, naming, secondsLeft, event, lastMove, onMove, onPlayAgain }: TableScreenProps) {
+export function TableScreen({ game, moves, naming, secondsLeft, event, lastAttack, onMove, onPlayAgain }: TableScreenProps) {
   const { width, height } = useWindowDimensions();
-  const [picked, setPicked] = useState<{ readonly title: string; readonly moves: readonly Move[] } | null>(null);
+  const [picked, setPicked] = useState<{ readonly card: Card; readonly moves: readonly Move[] } | null>(null);
 
-  const HUMAN_SEAT = naming.mySeat;
-  const play = onMove;
+  const mySeat = naming.mySeat;
 
   // إذا لعبت كل كروت دوري (أو خلصت رمي الزايد) وما بقى إلا إنهاء الدور، الدور ينتقل للاعب التالي تلقائياً.
   const onlyMove = moves.length === 1 ? moves[0] : undefined;
-  const playsDone = game.turn.playsUsed >= MAX_PLAYS_PER_TURN + game.extraPlays || game.turn.discarding;
-  const autoEnd = game.winner === null && playsDone && onlyMove?.type === 'endTurn' && onlyMove.seat === HUMAN_SEAT;
+  const playLimit = MAX_PLAYS_PER_TURN + game.extraPlays;
+  const playsDone = game.turn.playsUsed >= playLimit || game.turn.discarding;
+  const autoEnd = game.winner === null && playsDone && onlyMove?.type === 'endTurn' && onlyMove.seat === mySeat;
   useEffect(() => {
     if (!autoEnd) return undefined;
-    const timer = setTimeout(() => onMove({ type: 'endTurn', seat: HUMAN_SEAT }), AUTO_END_DELAY_MS);
+    const timer = setTimeout(() => onMove({ type: 'endTurn', seat: mySeat }), AUTO_END_DELAY_MS);
     return () => clearTimeout(timer);
     // onMove يتغير مع كل عرض؛ الانتقال مربوط بحالة الدور فقط.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoEnd, HUMAN_SEAT]);
+  }, [autoEnd, mySeat]);
 
-  const targets = moveTargets(lastMove);
-  const me = game.players[HUMAN_SEAT];
+  const me = game.players[mySeat];
   if (!me) return null;
   if (game.winner !== null) return <EndScreen game={game} naming={naming} onPlayAgain={onPlayAgain} />;
 
   // اللاعبين حولي بترتيب المقاعد: اليمين ثم المقابل ثم اليسار.
-  const rightSeat = (HUMAN_SEAT + 1) % PLAYER_COUNT;
-  const topSeat = (HUMAN_SEAT + 2) % PLAYER_COUNT;
-  const leftSeat = (HUMAN_SEAT + 3) % PLAYER_COUNT;
+  const rightSeat = (mySeat + 1) % PLAYER_COUNT;
+  const topSeat = (mySeat + 2) % PLAYER_COUNT;
+  const leftSeat = (mySeat + 3) % PLAYER_COUNT;
 
-  const myMoves = moves.filter((move) => move.seat === HUMAN_SEAT);
-  const myTurn = game.turn.seat === HUMAN_SEAT;
+  const myMoves = moves.filter((move) => move.seat === mySeat);
+  const myTurn = game.turn.seat === mySeat;
   const canDraw = myMoves.some((move) => move.type === 'draw');
   const canEnd = myMoves.some((move) => move.type === 'endTurn');
   const responseMoves = myMoves.filter((move) => move.type === 'respond');
-  const myDebt = game.response === null ? game.pending?.debts.find((d) => d.from === HUMAN_SEAT) : undefined;
+  const myDebt = game.response === null ? game.pending?.debts.find((d) => d.from === mySeat) : undefined;
 
   const doMove = (move: Move) => {
     setPicked(null);
-    play(move);
+    onMove(move);
   };
 
   /** كل حركاتي اللي تخص كرت معيّن (باليد أو على الطاولة). */
@@ -158,20 +201,37 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastMove,
         (('cardId' in move && move.cardId === cardId) || (move.type === 'playRent' && move.doubleCardId === cardId)),
     );
 
-  // المقاسات: الكروت تتصغر حسب ارتفاع الشاشة عشان تبان على الشاشة الصغيرة والكبيرة.
-  const bottomHeight = Math.max(96, height * 0.36);
-  const cardHeight = Math.min(112, bottomHeight - 12);
-  const cardWidth = cardHeight * 0.69;
-  const sideWidth = Math.max(132, width * 0.2);
-  const handSpace = width - sideWidth - 100 - 48;
-  const step =
-    me.hand.length > 1 ? Math.min(cardWidth + 6, (handSpace - cardWidth) / (me.hand.length - 1)) : cardWidth + 6;
+  // المقاسات: الكروت تتصغر حسب الشاشة وعدد الكروت باليد، وما تتراكب عشان كل كرت يبان كامل.
+  const bottomHeight = Math.max(100, height * 0.36);
+  const cardHeight = Math.min(116, bottomHeight - 14);
+  const sideWidth = Math.max(140, width * 0.21);
+  const handSpace = width - sideWidth - 108 - 44;
+  const handGap = 5;
+  const cardWidth = Math.max(
+    40,
+    Math.min(cardHeight * 0.69, (handSpace - handGap * Math.max(me.hand.length - 1, 0)) / Math.max(me.hand.length, 1)),
+  );
   const pileHeight = Math.min(84, height * 0.2);
 
   const jokers = me.properties.filter((p) => p.card.kind === 'joker');
   const effect = game.response?.effect;
   const standing = game.response?.standing;
-  const revealed = game.revealed?.viewer === HUMAN_SEAT ? game.players[game.revealed.target] : undefined;
+  const revealed = game.revealed?.viewer === mySeat ? game.players[game.revealed.target] : undefined;
+
+  // السهم المزدوج: على خانة اللاعب المستهدف، وبوسط الطاولة.
+  const targets = moveTargets(lastAttack);
+  const attackedCard = lastAttack && 'cardId' in lastAttack ? cardById(lastAttack.cardId) : undefined;
+  const banner =
+    lastAttack && targets.length > 0 && attackedCard
+      ? S.attackBanner(
+          seatName(lastAttack.seat, naming),
+          cardInfo(attackedCard).name,
+          targets.map((seat) => seatName(seat, naming)).join('، '),
+        )
+      : null;
+
+  const responseCard = effect ? attackCard(effect.action, lastAttack) : undefined;
+  const dots = Array.from({ length: playLimit }, (_, index) => index < game.turn.playsUsed);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']}>
@@ -182,9 +242,19 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastMove,
             <Text style={styles.turn}>{myTurn ? S.yourTurn : S.turnOf(seatName(game.turn.seat, naming))}</Text>
             {myTurn ? <Text style={styles.timer}>{formatTime(secondsLeft)}</Text> : null}
           </View>
-          <Text style={styles.small}>
-            {myTurn ? S.played(game.turn.playsUsed, MAX_PLAYS_PER_TURN + game.extraPlays) : S.waiting}
-          </Text>
+          {myTurn ? (
+            <View style={styles.timeTrack}>
+              <View style={[styles.timeBar, { width: `${Math.max(0, Math.min(100, (secondsLeft / TURN_SECONDS) * 100))}%` }]} />
+            </View>
+          ) : null}
+          <View style={styles.playsRow}>
+            <Text style={styles.small}>{myTurn ? S.played(game.turn.playsUsed, playLimit) : S.waiting}</Text>
+            {myTurn
+              ? dots.map((filled, index) => (
+                  <View key={index} testID={filled ? 'play-dot-on' : 'play-dot-off'} style={[styles.dot, filled && styles.dotOn]} />
+                ))
+              : null}
+          </View>
         </View>
         <View style={styles.flex}>
           <OpponentPanel game={game} seat={topSeat} row naming={naming} targeted={targets.includes(topSeat)} />
@@ -204,22 +274,30 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastMove,
             </View>
             <View style={styles.pile}>
               {game.firePile.length > 0 ? (
-                <CardView
-                  card={game.firePile[game.firePile.length - 1] as PlayerState['hand'][number]}
-                  width={pileHeight * 0.69}
-                  height={pileHeight}
-                />
+                <CardView card={game.firePile[game.firePile.length - 1] as Card} width={pileHeight * 0.69} height={pileHeight} />
               ) : (
                 <View style={[styles.emptyPile, { width: pileHeight * 0.69, height: pileHeight }]} />
               )}
               <Text style={styles.small}>{S.fire}</Text>
             </View>
           </View>
-          <Text style={styles.event} numberOfLines={2}>
-            {revealed
-              ? `${S.revealedHand(seatName(revealed.seat, naming))} ${revealed.hand.map((card) => cardInfo(card).name).join('، ')}`
-              : event}
-          </Text>
+          {banner ? (
+            <View testID="attack-banner" style={styles.banner}>
+              <Arrow size={14} />
+              <Text style={styles.bannerText} numberOfLines={2}>
+                {banner}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.event} numberOfLines={2}>
+              {event}
+            </Text>
+          )}
+          {revealed ? (
+            <Text style={styles.event} numberOfLines={2}>
+              {S.revealedHand(seatName(revealed.seat, naming))} {revealed.hand.map((card) => cardInfo(card).name).join('، ')}
+            </Text>
+          ) : null}
         </View>
         <View style={{ width: sideWidth }}>
           <OpponentPanel game={game} seat={rightSeat} row={false} naming={naming} targeted={targets.includes(rightSeat)} />
@@ -229,66 +307,65 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastMove,
       {/* الصف السفلي: بنكي وعقاراتي، يدي، وأزرار الدور */}
       <View style={[styles.bottomRow, { height: bottomHeight }]}>
         <View
-          testID={targets.includes(HUMAN_SEAT) ? `targeted-${HUMAN_SEAT}` : undefined}
-          style={[styles.panel, styles.mine, { width: sideWidth }, targets.includes(HUMAN_SEAT) && styles.panelTargeted]}
+          testID={targets.includes(mySeat) ? `targeted-${mySeat}` : undefined}
+          style={[styles.panel, styles.mine, { width: sideWidth }, targets.includes(mySeat) && styles.panelTargeted]}
         >
-          {targets.includes(HUMAN_SEAT) ? <TargetArrow /> : null}
-          <View style={styles.between}>
-            <Text style={styles.name}>
-              {S.you}
-              {game.immune.includes(HUMAN_SEAT) ? ` · ${S.immune}` : ''}
-            </Text>
-            <Text style={styles.small}>{S.completeSets(completeColors(me.properties).length, game.winTarget)}</Text>
-          </View>
-          <Text style={styles.small}>{S.myBank(bankTotal(me))}</Text>
-          <SetChips player={me} />
-          <View style={styles.chips}>
-            {jokers.map((placed) => (
-              <Pressable
-                key={placed.card.id}
-                testID={`table-${placed.card.id}`}
-                accessibilityRole="button"
-                style={styles.chipButton}
-                onPress={() => setPicked({ title: S.joker, moves: movesFor(placed.card.id) })}
-              >
-                <Text style={styles.chipText}>
-                  {S.joker} · {colorName(placed.color)}
-                </Text>
-              </Pressable>
-            ))}
-            {me.buildings.map((building) => (
-              <Pressable
-                key={building.card.id}
-                testID={`table-${building.card.id}`}
-                accessibilityRole="button"
-                style={styles.chipButton}
-                onPress={() => setPicked({ title: cardInfo(building.card).name, moves: movesFor(building.card.id) })}
-              >
-                <Text style={styles.chipText}>
-                  {cardInfo(building.card).name} · {building.color ? colorName(building.color) : S.looseBuilding}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <ScrollView contentContainerStyle={styles.mineContent}>
+            {targets.includes(mySeat) ? <TargetArrow /> : null}
+            <View style={styles.between}>
+              <Text style={styles.name}>{S.you}</Text>
+              <Text style={styles.sets}>{S.completeSets(completeColors(me.properties).length, game.winTarget)}</Text>
+            </View>
+            <StatusBadges game={game} seat={mySeat} />
+            <Text style={styles.small}>{S.myBank(bankTotal(me))}</Text>
+            <SetChips player={me} />
+            <View style={styles.chips}>
+              {jokers.map((placed) => (
+                <Pressable
+                  key={placed.card.id}
+                  testID={`table-${placed.card.id}`}
+                  accessibilityRole="button"
+                  style={styles.chipButton}
+                  onPress={() => setPicked({ card: placed.card, moves: movesFor(placed.card.id) })}
+                >
+                  <Text style={styles.chipText}>
+                    {S.joker} · {colorName(placed.color)}
+                  </Text>
+                </Pressable>
+              ))}
+              {me.buildings.map((building) => (
+                <Pressable
+                  key={building.card.id}
+                  testID={`table-${building.card.id}`}
+                  accessibilityRole="button"
+                  style={styles.chipButton}
+                  onPress={() => setPicked({ card: building.card, moves: movesFor(building.card.id) })}
+                >
+                  <Text style={styles.chipText}>
+                    {cardInfo(building.card).name} · {building.color ? colorName(building.color) : S.looseBuilding}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
         </View>
 
-        <View style={styles.hand}>
-          {me.hand.map((card, index) => (
-            <View key={card.id} style={{ marginLeft: index === 0 ? 0 : step - cardWidth }}>
-              <CardView
-                card={card}
-                width={cardWidth}
-                height={cardHeight}
-                testID={`hand-${card.id}`}
-                onPress={() => setPicked({ title: cardInfo(card).name, moves: movesFor(card.id) })}
-              />
-            </View>
+        <View style={[styles.hand, { gap: handGap }]}>
+          {me.hand.map((card) => (
+            <CardView
+              key={card.id}
+              card={card}
+              width={cardWidth}
+              height={cardHeight}
+              testID={`hand-${card.id}`}
+              onPress={() => setPicked({ card, moves: movesFor(card.id) })}
+            />
           ))}
         </View>
 
         <View style={styles.buttons}>
           {canDraw ? (
-            <Pressable testID="draw" accessibilityRole="button" style={styles.primary} onPress={() => doMove({ type: 'draw', seat: HUMAN_SEAT })}>
+            <Pressable testID="draw" accessibilityRole="button" style={styles.primary} onPress={() => doMove({ type: 'draw', seat: mySeat })}>
               <Text style={styles.primaryText}>{S.draw}</Text>
             </Pressable>
           ) : null}
@@ -299,28 +376,34 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastMove,
               accessibilityState={{ disabled: !canEnd }}
               disabled={!canEnd}
               style={[styles.secondary, !canEnd && styles.disabled]}
-              onPress={() => doMove({ type: 'endTurn', seat: HUMAN_SEAT })}
+              onPress={() => doMove({ type: 'endTurn', seat: mySeat })}
             >
-              <Text style={styles.secondaryText}>{me.hand.length > MAX_HAND_SIZE ? S.discardFirst : S.endTurn}</Text>
+              <Text style={styles.secondaryText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {me.hand.length > MAX_HAND_SIZE ? S.discardFirst : S.endTurn}
+              </Text>
             </Pressable>
           ) : null}
         </View>
       </View>
 
-      {/* النوافذ: الرد أولاً، ثم الدفع، ثم اختيار الحركة */}
+      {/* النوافذ: الرد أولاً، ثم الدفع، ثم لعب الكرت */}
       {effect && responseMoves.length > 0 ? (
-        <OptionsModal
+        <MoveWizard
           key={`respond-${game.firePile.length}`}
+          danger
+          card={responseCard}
+          cardLabel={effect.target === mySeat ? S.playedAgainstYou : S.playedCard}
           title={
             standing
               ? S.respondCounter(seatName(standing.by, naming), S.kindDefense)
-              : effect.target === HUMAN_SEAT
+              : effect.target === mySeat
                 ? S.respondTitleOnYou(seatName(effect.actor, naming))
                 : S.respondTitleOnOther(seatName(effect.actor, naming), seatName(effect.target, naming))
           }
           subtitle={describeEffect(effect)}
+          note={S.responseNote}
           moves={responseMoves}
-          state={game}
+          game={game}
           naming={naming}
           onPick={doMove}
         />
@@ -330,14 +413,15 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastMove,
           me={me}
           amount={myDebt.amount}
           toName={seatName(game.pending?.to ?? 0, naming)}
-          onPay={(cardIds) => doMove({ type: 'pay', seat: HUMAN_SEAT, cardIds })}
+          reason={attackedCard ? cardInfo(attackedCard).name : undefined}
+          onPay={(cardIds) => doMove({ type: 'pay', seat: mySeat, cardIds })}
         />
       ) : picked ? (
-        <OptionsModal
-          title={picked.title}
-          subtitle={S.chooseAction}
+        <MoveWizard
+          key={`play-${picked.card.id}`}
+          card={picked.card}
           moves={picked.moves}
-          state={game}
+          game={game}
           naming={naming}
           onPick={doMove}
           onClose={() => setPicked(null)}
@@ -393,31 +477,18 @@ const styles = StyleSheet.create({
   panelTargeted: {
     borderColor: theme.danger,
   },
-  arrowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  arrow: {
-    width: 0,
-    height: 0,
-    borderTopWidth: 6,
-    borderBottomWidth: 6,
-    borderLeftWidth: 10,
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-    borderLeftColor: theme.danger,
-  },
-  arrowText: {
-    color: theme.danger,
-    fontSize: 11,
-    fontWeight: '800',
+  info: {
+    gap: 3,
+    flexShrink: 1,
   },
   status: {
     justifyContent: 'center',
   },
   mine: {
     borderColor: theme.gold,
+  },
+  mineContent: {
+    gap: 4,
   },
   between: {
     flexDirection: 'row',
@@ -434,6 +505,11 @@ const styles = StyleSheet.create({
     color: theme.muted,
     fontSize: 11,
   },
+  sets: {
+    color: theme.gold,
+    fontSize: 12,
+    fontWeight: '800',
+  },
   turn: {
     color: theme.gold,
     fontSize: 16,
@@ -443,6 +519,33 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontSize: 16,
     fontWeight: '800',
+  },
+  timeTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.line,
+    overflow: 'hidden',
+  },
+  timeBar: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.gold,
+  },
+  playsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  dot: {
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: theme.muted,
+  },
+  dotOn: {
+    backgroundColor: theme.gold,
+    borderColor: theme.gold,
   },
   chips: {
     flexDirection: 'row',
@@ -470,7 +573,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: theme.felt,
     borderWidth: 1,
-    borderColor: theme.line,
+    borderColor: theme.gold,
   },
   chipText: {
     color: theme.text,
@@ -483,6 +586,47 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     borderWidth: 1,
     borderColor: theme.muted,
+  },
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  badgeSkip: {
+    backgroundColor: theme.danger,
+  },
+  badgeImmune: {
+    backgroundColor: theme.gold,
+  },
+  badgeText: {
+    color: theme.cardInk,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  badgeTextDark: {
+    color: theme.cardInk,
+  },
+  arrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  arrow: {
+    width: 0,
+    height: 0,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftColor: theme.danger,
+  },
+  arrowText: {
+    color: theme.danger,
+    fontSize: 11,
+    fontWeight: '800',
   },
   table: {
     flex: 1,
@@ -509,6 +653,24 @@ const styles = StyleSheet.create({
     borderColor: theme.line,
     borderStyle: 'dashed',
   },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: theme.panel,
+    borderWidth: 2,
+    borderColor: theme.danger,
+    maxWidth: '94%',
+  },
+  bannerText: {
+    color: theme.text,
+    fontSize: 14,
+    fontWeight: '800',
+    flexShrink: 1,
+  },
   event: {
     color: theme.text,
     fontSize: 12,
@@ -519,9 +681,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
+    paddingBottom: 4,
   },
   buttons: {
-    width: 100,
+    width: 108,
     justifyContent: 'flex-end',
     gap: 6,
   },
@@ -544,10 +707,11 @@ const styles = StyleSheet.create({
     borderColor: theme.text,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   secondaryText: {
     color: theme.text,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
   },
   disabled: {

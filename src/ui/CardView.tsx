@@ -1,4 +1,4 @@
-// شكل الكرت: شريط ملوّن، النوع، الاسم، وسطر صغير — حسب المرجع البصري في design/
+// شكل الكرت: مجسم بحدود وظل، شريط ملوّن، النوع، الاسم، وسطر صغير — حسب المرجع البصري في design/
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -11,37 +11,44 @@ interface CardViewProps {
   readonly width: number;
   readonly height: number;
   readonly selected?: boolean;
+  /** نص تأثير الكرت، يطلع بدل السطر الصغير (للكروت الكبيرة بالنوافذ) */
+  readonly description?: string;
   readonly onPress?: () => void;
   readonly testID?: string;
 }
 
-export function CardView({ card, width, height, selected = false, onPress, testID }: CardViewProps) {
+export function CardView({ card, width, height, selected = false, description, onPress, testID }: CardViewProps) {
   const info = cardInfo(card);
-  const nameSize = Math.max(11, Math.min(16, width * 0.2));
+  const nameSize = Math.max(10, Math.min(18, width * 0.2));
+  const bandHeight = Math.max(8, height * 0.13);
 
   const body = (
     <View style={[styles.card, { width, height }, selected && styles.selected]}>
-      <Band info={info} top height={Math.max(10, height * 0.15)} />
+      <Band info={info} top height={bandHeight} />
       <Text style={styles.kind} numberOfLines={1}>
         {info.kind}
       </Text>
       <View style={styles.nameBox}>
-        <Text style={[styles.name, { fontSize: nameSize }]} numberOfLines={2} adjustsFontSizeToFit>
+        <Text style={[styles.name, { fontSize: nameSize }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
           {info.name}
         </Text>
       </View>
-      <Text style={styles.sub} numberOfLines={1}>
-        {info.sub}
+      <Text style={styles.sub} numberOfLines={description ? 3 : 1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        {description ?? info.sub}
       </Text>
-      {info.bandBottom !== undefined || info.stripes !== undefined ? (
-        <Band info={info} top={false} height={Math.max(10, height * 0.15)} />
-      ) : null}
+      {info.bandBottom !== undefined || info.stripes !== undefined ? <Band info={info} top={false} height={bandHeight} /> : null}
     </View>
   );
 
   if (!onPress) return body;
   return (
-    <Pressable onPress={onPress} testID={testID} accessibilityRole="button" accessibilityLabel={`${info.kind} ${info.name}`}>
+    <Pressable
+      onPress={onPress}
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${info.kind} ${info.name}`}
+    >
       {body}
     </Pressable>
   );
@@ -72,15 +79,26 @@ export function CardBack({ width, height, label }: { readonly width: number; rea
 }
 
 const styles = StyleSheet.create({
+  // شكل مجسم: حد واضح حول الكرت، حافة سفلية أثخن، وظل.
   card: {
     backgroundColor: theme.cardFace,
     borderRadius: 8,
     overflow: 'hidden',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#8E8674',
+    borderBottomWidth: 4,
+    borderBottomColor: '#6F6858',
+    elevation: 6,
+    shadowColor: '#000000',
+    shadowOpacity: 0.45,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
   },
   selected: {
-    borderWidth: 3,
     borderColor: theme.gold,
+    borderBottomColor: theme.gold,
+    borderWidth: 3,
   },
   band: {
     alignSelf: 'stretch',
@@ -110,8 +128,9 @@ const styles = StyleSheet.create({
   sub: {
     fontSize: 10,
     color: theme.cardMuted,
-    marginBottom: 4,
-    paddingHorizontal: 2,
+    marginBottom: 3,
+    paddingHorizontal: 3,
+    textAlign: 'center',
   },
   back: {
     backgroundColor: '#1F3C88',
@@ -120,6 +139,7 @@ const styles = StyleSheet.create({
     borderColor: theme.gold,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 6,
   },
   backText: {
     color: theme.gold,

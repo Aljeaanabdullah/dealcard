@@ -24,7 +24,7 @@ export type MoveError =
   | 'colorNotAllowed'
   | 'noPropertyInColor'
   | 'setNotComplete'
-  | 'buildingNotLoose'
+  | 'buildingNotOnTable'
   | 'noCompleteSet'
   | 'unsupportedAction'
   | 'responsePending'

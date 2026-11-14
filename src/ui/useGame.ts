@@ -21,8 +21,8 @@ interface Session {
   readonly secondsLeft: number;
   readonly event: string;
   readonly error: MoveError | null;
-  /** آخر حركة انلعبت (لسهم المستهدف بالطاولة) */
-  readonly lastMove: Move | null;
+  /** آخر أكشن أو إيجار انلعب بهذا الدور (لسهم المستهدف ونوافذ الرد والدفع) */
+  readonly lastAttack: Move | null;
 }
 
 type SessionAction =
@@ -43,12 +43,17 @@ function reducer(session: Session, action: SessionAction): Session {
         secondsLeft: turnChanged ? TURN_SECONDS : session.secondsLeft,
         event: describeEvent(action.move, session.game, LOCAL_NAMING),
         error: null,
-        lastMove: action.move,
+        lastAttack:
+          action.move.type === 'playAction' || action.move.type === 'playRent'
+            ? action.move
+            : turnChanged
+              ? null
+              : session.lastAttack,
       };
     }
     case 'set':
       if (action.expect !== session.game) return session;
-      return { game: action.game, secondsLeft: TURN_SECONDS, event: action.event, error: null, lastMove: null };
+      return { game: action.game, secondsLeft: TURN_SECONDS, event: action.event, error: null, lastAttack: null };
     case 'tick': {
       const myTurn = session.game.turn.seat === HUMAN_SEAT && session.game.winner === null;
       return myTurn && session.secondsLeft > 0 ? { ...session, secondsLeft: session.secondsLeft - 1 } : session;
@@ -61,7 +66,7 @@ export interface GameController {
   readonly secondsLeft: number;
   readonly event: string;
   readonly error: MoveError | null;
-  readonly lastMove: Move | null;
+  readonly lastAttack: Move | null;
   /** يلعب حركة اللاعب. */
   readonly play: (move: Move) => void;
 }
@@ -72,7 +77,7 @@ export function useGame(winTarget: WinTarget, seed: number): GameController {
     secondsLeft: TURN_SECONDS,
     event: '',
     error: null,
-    lastMove: null,
+    lastAttack: null,
   }));
   const rngRef = useRef(createRng(seed ^ 0x51f15e));
   const { game, secondsLeft } = session;
@@ -125,7 +130,7 @@ export function useGame(winTarget: WinTarget, seed: number): GameController {
     secondsLeft,
     event: session.event,
     error: session.error,
-    lastMove: session.lastMove,
+    lastAttack: session.lastAttack,
     play: (move: Move) => dispatch({ type: 'move', move }),
   };
 }

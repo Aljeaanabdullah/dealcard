@@ -1,8 +1,9 @@
-// الشاشة الرئيسية: الاسم المستعار، لعب ضد البوتات، إنشاء غرفة خاصة، أو دخول بكود.
-// (اختيار اللغة والإعدادات تنضاف في المرحلة 10.)
+// الشاشة الرئيسية حسب design/Home.dc.html: الشعار والترحيب فوق، وتحتها أربع بطاقات:
+// لعب عشوائي، إنشاء غرفة خاصة، دخول بكود، لعب ضد البوتات.
+// الاسم وكود الغرفة وشرط الفوز يطلعون بنافذة صغيرة عند الحاجة.
 
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { WIN_TARGETS, type WinTarget } from '../data/rules';
@@ -14,13 +15,19 @@ import { theme } from './theme';
 interface HomeScreenProps {
   /** null = اللعب أونلاين مو مجهز */
   readonly transport: Transport | null;
+  readonly name: string;
+  readonly onNameChange: (name: string) => void;
   readonly onPlayBots: (winTarget: WinTarget) => void;
   readonly onEnterRoom: (snapshot: RoomSnapshot) => void;
 }
 
-export function HomeScreen({ transport, onPlayBots, onEnterRoom }: HomeScreenProps) {
+type Dialog = 'name' | 'bots' | 'join' | null;
+
+export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterRoom }: HomeScreenProps) {
+  // الاسم ينكتب مرة وحدة أول ما ينفتح التطبيق.
+  const [dialog, setDialog] = useState<Dialog>(name === '' ? 'name' : null);
+  const [draftName, setDraftName] = useState(name);
   const [winTarget, setWinTarget] = useState<WinTarget>(WIN_TARGETS[0]);
-  const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -40,78 +47,169 @@ export function HomeScreen({ transport, onPlayBots, onEnterRoom }: HomeScreenPro
 
   const online = transport !== null && !busy;
 
+  /** إنشاء غرفة: الكود يتكوّن عشوائي من الخادم، واللاعب ما يكتب شي. */
+  const createRoom = () => {
+    if (!transport) return;
+    if (name.trim() === '') {
+      setDialog('name');
+      return;
+    }
+    enter(transport.createRoom(name));
+  };
+
+  const joinRoom = () => {
+    if (!transport) return;
+    setDialog(null);
+    enter(transport.joinRoom(code, name));
+  };
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']}>
-      <View style={styles.brand}>
+      <View style={styles.header}>
         <Text style={styles.logo}>{S.appName}</Text>
-        <Text style={styles.text}>{S.tagline}</Text>
+        <View style={styles.flex} />
+        <Pressable testID="edit-name" accessibilityRole="button" style={styles.hello} onPress={() => setDialog('name')}>
+          <Text style={styles.helloText}>{S.hello(name.trim() === '' ? S.guest : name)}</Text>
+        </Pressable>
+        <View style={[styles.settings, styles.disabled]} accessibilityLabel={`${S.settings} · ${S.soon}`}>
+          <Text style={styles.small}>{S.settings}</Text>
+          <Text style={styles.small}>{S.soon}</Text>
+        </View>
       </View>
 
-      <View style={styles.form}>
-        <TextInput
-          testID="name-input"
-          accessibilityLabel={S.nickname}
-          style={styles.input}
-          placeholder={S.namePlaceholder}
-          placeholderTextColor={theme.muted}
-          value={name}
-          onChangeText={setName}
-          maxLength={16}
-        />
+      <Text style={styles.note}>{transport === null ? S.onlineUnavailable : error}</Text>
 
-        <View style={styles.row}>
-          {WIN_TARGETS.map((target) => (
-            <Pressable
-              key={target}
-              testID={`start-${target}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: winTarget === target }}
-              style={[styles.choice, winTarget === target && styles.choiceOn]}
-              onPress={() => setWinTarget(target)}
-            >
-              <Text style={[styles.choiceText, winTarget === target && styles.choiceTextOn]}>{S.sets(target)}</Text>
-            </Pressable>
-          ))}
+      <View style={styles.cards}>
+        {/* لعب عشوائي: المرحلة 9، ما انبنت بعد */}
+        <View testID="home-random" style={[styles.card, styles.cardGold, styles.disabled]}>
+          <Text style={styles.soon}>{S.soon}</Text>
+          <View>
+            <Text style={[styles.cardTitle, styles.dark]}>{S.randomPlay}</Text>
+            <Text style={[styles.cardDesc, styles.dark]}>{S.randomDesc}</Text>
+          </View>
         </View>
-        <Pressable testID="start-go" accessibilityRole="button" style={styles.primary} onPress={() => onPlayBots(winTarget)}>
-          <Text style={styles.primaryText}>{S.playVsBots}</Text>
-        </Pressable>
 
         <Pressable
           testID="create-room"
           accessibilityRole="button"
           accessibilityState={{ disabled: !online }}
           disabled={!online}
-          style={[styles.secondary, !online && styles.disabled]}
-          onPress={() => transport && enter(transport.createRoom(name))}
+          style={[styles.card, !online && styles.disabled]}
+          onPress={createRoom}
         >
-          <Text style={styles.secondaryText}>{S.createRoom}</Text>
+          <View style={styles.mark} />
+          <View>
+            <Text style={styles.cardTitle}>{S.createRoom}</Text>
+            <Text style={styles.cardDesc}>{S.createDesc}</Text>
+          </View>
         </Pressable>
-        <View style={styles.row}>
-          <TextInput
-            testID="code-input"
-            accessibilityLabel={S.codePlaceholder}
-            style={[styles.input, styles.flex]}
-            placeholder={S.codePlaceholder}
-            placeholderTextColor={theme.muted}
-            value={code}
-            onChangeText={(value) => setCode(value.toUpperCase())}
-            autoCapitalize="characters"
-            maxLength={5}
-          />
-          <Pressable
-            testID="join-room"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !online }}
-            disabled={!online}
-            style={[styles.secondary, styles.join, !online && styles.disabled]}
-            onPress={() => transport && enter(transport.joinRoom(code, name))}
-          >
-            <Text style={styles.secondaryText}>{S.joinByCode}</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.note}>{transport === null ? S.onlineUnavailable : error}</Text>
+
+        <Pressable
+          testID="join-room"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !online }}
+          disabled={!online}
+          style={[styles.card, !online && styles.disabled]}
+          onPress={() => setDialog(name.trim() === '' ? 'name' : 'join')}
+        >
+          <View style={styles.mark} />
+          <View>
+            <Text style={styles.cardTitle}>{S.joinTitle}</Text>
+            <Text style={styles.cardDesc}>{S.joinDesc}</Text>
+          </View>
+        </Pressable>
+
+        <Pressable testID="home-bots" accessibilityRole="button" style={styles.card} onPress={() => setDialog('bots')}>
+          <View style={styles.mark} />
+          <View>
+            <Text style={styles.cardTitle}>{S.playVsBots}</Text>
+            <Text style={styles.cardDesc}>{S.botsDesc}</Text>
+          </View>
+        </Pressable>
       </View>
+
+      {dialog !== null ? (
+        <Modal transparent visible animationType="fade" supportedOrientations={['landscape']} onRequestClose={() => setDialog(null)}>
+          <View style={styles.backdrop}>
+            <View style={styles.sheet}>
+              {dialog === 'name' ? (
+                <>
+                  <Text style={styles.sheetTitle}>{S.enterName}</Text>
+                  <TextInput
+                    testID="name-input"
+                    accessibilityLabel={S.nickname}
+                    style={styles.input}
+                    placeholder={S.namePlaceholder}
+                    placeholderTextColor={theme.muted}
+                    value={draftName}
+                    onChangeText={setDraftName}
+                    maxLength={16}
+                  />
+                  <Pressable
+                    testID="name-save"
+                    accessibilityRole="button"
+                    style={styles.primary}
+                    onPress={() => {
+                      onNameChange(draftName.trim());
+                      setDialog(null);
+                    }}
+                  >
+                    <Text style={styles.primaryText}>{S.save}</Text>
+                  </Pressable>
+                </>
+              ) : null}
+
+              {dialog === 'bots' ? (
+                <>
+                  <Text style={styles.sheetTitle}>{S.playVsBots}</Text>
+                  <Text style={styles.small}>{S.winCondition}</Text>
+                  <View style={styles.row}>
+                    {WIN_TARGETS.map((target) => (
+                      <Pressable
+                        key={target}
+                        testID={`start-${target}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: winTarget === target }}
+                        style={[styles.choice, winTarget === target && styles.choiceOn]}
+                        onPress={() => setWinTarget(target)}
+                      >
+                        <Text style={[styles.choiceText, winTarget === target && styles.dark]}>{S.sets(target)}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Pressable testID="start-go" accessibilityRole="button" style={styles.primary} onPress={() => onPlayBots(winTarget)}>
+                    <Text style={styles.primaryText}>{S.start}</Text>
+                  </Pressable>
+                </>
+              ) : null}
+
+              {dialog === 'join' ? (
+                <>
+                  <Text style={styles.sheetTitle}>{S.joinTitle}</Text>
+                  <TextInput
+                    testID="code-input"
+                    accessibilityLabel={S.codePlaceholder}
+                    style={styles.input}
+                    placeholder={S.codePlaceholder}
+                    placeholderTextColor={theme.muted}
+                    value={code}
+                    onChangeText={(value) => setCode(value.toUpperCase())}
+                    autoCapitalize="characters"
+                    maxLength={5}
+                  />
+                  <Pressable testID="join-go" accessibilityRole="button" style={styles.primary} onPress={joinRoom}>
+                    <Text style={styles.primaryText}>{S.joinByCode}</Text>
+                  </Pressable>
+                </>
+              ) : null}
+
+              <Pressable testID="dialog-close" accessibilityRole="button" style={styles.secondary} onPress={() => setDialog(null)}>
+                <Text style={styles.secondaryText}>{S.cancel}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -119,46 +217,134 @@ export function HomeScreen({ transport, onPlayBots, onEnterRoom }: HomeScreenPro
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    flexDirection: 'row',
     backgroundColor: theme.ground,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 6,
   },
   flex: {
     flex: 1,
   },
-  brand: {
-    flex: 1,
-    backgroundColor: theme.felt,
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 10,
-    padding: 16,
   },
   logo: {
     color: theme.gold,
-    fontSize: 52,
+    fontSize: 32,
     fontWeight: '800',
   },
-  text: {
-    color: theme.text,
-    fontSize: 16,
+  hello: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  helloText: {
+    color: theme.muted,
+    fontSize: 15,
     fontWeight: '700',
+  },
+  settings: {
+    minHeight: 44,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: theme.panel,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  note: {
+    minHeight: 16,
+    color: theme.muted,
+    fontSize: 12,
     textAlign: 'center',
   },
-  form: {
+  cards: {
     flex: 1,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  card: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: theme.felt,
+    borderWidth: 2,
+    borderColor: theme.line,
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+  cardGold: {
+    backgroundColor: theme.gold,
+    borderColor: theme.gold,
+  },
+  mark: {
+    width: 34,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.gold,
+  },
+  soon: {
+    alignSelf: 'flex-start',
+    color: theme.cardInk,
+    fontSize: 13,
+    fontWeight: '800',
+    borderWidth: 2,
+    borderColor: theme.cardInk,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  cardTitle: {
+    color: theme.text,
+    fontSize: 21,
+    fontWeight: '800',
+  },
+  cardDesc: {
+    color: theme.muted,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  dark: {
+    color: theme.cardInk,
+  },
+  small: {
+    color: theme.muted,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  disabled: {
+    opacity: 0.45,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: theme.backdrop,
+    alignItems: 'center',
     justifyContent: 'center',
+    padding: 12,
+  },
+  sheet: {
+    width: '56%',
+    backgroundColor: theme.ground,
+    borderColor: theme.line,
+    borderWidth: 2,
+    borderRadius: 14,
+    padding: 14,
     gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+  },
+  sheetTitle: {
+    color: theme.text,
+    fontSize: 19,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   input: {
-    minHeight: 44,
+    minHeight: 46,
     borderRadius: 10,
     borderWidth: 2,
     borderColor: theme.line,
     backgroundColor: theme.panel,
     color: theme.text,
-    fontSize: 16,
+    fontSize: 17,
     paddingHorizontal: 12,
     textAlign: 'center',
   },
@@ -168,7 +354,7 @@ const styles = StyleSheet.create({
   },
   choice: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 46,
     borderRadius: 10,
     borderWidth: 2,
     borderColor: theme.line,
@@ -182,10 +368,6 @@ const styles = StyleSheet.create({
   choiceText: {
     color: theme.text,
     fontSize: 15,
-    fontWeight: '700',
-  },
-  choiceTextOn: {
-    color: theme.cardInk,
     fontWeight: '800',
   },
   primary: {
@@ -197,7 +379,7 @@ const styles = StyleSheet.create({
   },
   primaryText: {
     color: theme.cardInk,
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: '800',
   },
   secondary: {
@@ -210,19 +392,7 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     color: theme.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-  },
-  join: {
-    width: 110,
-  },
-  disabled: {
-    opacity: 0.4,
-  },
-  note: {
-    minHeight: 16,
-    color: theme.muted,
-    fontSize: 12,
-    textAlign: 'center',
   },
 });

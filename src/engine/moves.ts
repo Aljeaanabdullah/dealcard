@@ -104,7 +104,13 @@ export type Move =
     }
   | PlayActionMove
   | { readonly type: 'burnAction'; readonly seat: number; readonly cardId: string }
-  | { readonly type: 'playBuilding'; readonly seat: number; readonly cardId: string; readonly color: ColorId }
+  | {
+      readonly type: 'playBuilding';
+      readonly seat: number;
+      readonly cardId: string;
+      /** الطقم الكامل اللي ينحط عليه. بدون لون = ينحط جنب البنك بدون طقم. */
+      readonly color?: ColorId;
+    }
   | { readonly type: 'placeBuilding'; readonly seat: number; readonly cardId: string; readonly color: ColorId }
   | RespondMove
   | { readonly type: 'pay'; readonly seat: number; readonly cardIds: readonly string[] }
@@ -549,7 +555,7 @@ function playAction(state: GameState, move: PlayActionMove): MoveResult {
   return done(advance({ ...base, queue: effects }));
 }
 
-/** حرق كرت أكشن: ينرمي بالنار بدون تنفيذ، وينحسب من كروت الدور. */
+/** حرق كرت أكشن أو إيجار (ومنه دوبل ايجار): ينرمي بالنار بدون تنفيذ، وينحسب من كروت الدور. */
 function burnAction(state: GameState, seat: number, cardId: string): MoveResult {
   const blocked = checkCanPlay(state);
   if (blocked) return fail(blocked);
@@ -557,7 +563,7 @@ function burnAction(state: GameState, seat: number, cardId: string): MoveResult 
   const player = getPlayer(state, seat);
   const card = player.hand.find((c) => c.id === cardId);
   if (!card) return fail('cardNotInHand');
-  if (card.kind !== 'action') return fail('wrongCardKind');
+  if (card.kind !== 'action' && card.kind !== 'rent') return fail('wrongCardKind');
 
   return done(
     withPlayer(
@@ -567,7 +573,8 @@ function burnAction(state: GameState, seat: number, cardId: string): MoveResult 
   );
 }
 
-function playBuilding(state: GameState, seat: number, cardId: string, color: ColorId): MoveResult {
+/** يلعب مبنى من اليد: على طقم كامل، أو جنب البنك بدون طقم (بدون تأثير لين ينحط على طقم كامل). */
+function playBuilding(state: GameState, seat: number, cardId: string, color: ColorId | undefined): MoveResult {
   const blocked = checkCanPlay(state);
   if (blocked) return fail(blocked);
 
@@ -575,24 +582,26 @@ function playBuilding(state: GameState, seat: number, cardId: string, color: Col
   const card = player.hand.find((c) => c.id === cardId);
   if (!card) return fail('cardNotInHand');
   if (card.kind !== 'building') return fail('wrongCardKind');
-  if (!isSetComplete(player.properties, color)) return fail('setNotComplete');
+  if (color !== undefined && !isSetComplete(player.properties, color)) return fail('setNotComplete');
 
   return done(
     withPlayer(countPlay(state), {
       ...player,
       hand: player.hand.filter((c) => c.id !== cardId),
-      buildings: [...player.buildings, { card, color }],
+      buildings: [...player.buildings, { card, color: color ?? null }],
     }),
   );
 }
 
+/** ينقل مبنى على الطاولة لطقم كامل: من جنب البنك، أو من طقم لطقم ثاني. ينحسب من كروت الدور. */
 function placeBuilding(state: GameState, seat: number, cardId: string, color: ColorId): MoveResult {
   const blocked = checkCanPlay(state);
   if (blocked) return fail(blocked);
 
   const player = getPlayer(state, seat);
   const placed = player.buildings.find((b) => b.card.id === cardId);
-  if (!placed || placed.color !== null) return fail('buildingNotLoose');
+  if (!placed) return fail('buildingNotOnTable');
+  if (placed.color === color) return fail('sameColor');
   if (!isSetComplete(player.properties, color)) return fail('setNotComplete');
 
   return done(
@@ -884,10 +893,13 @@ export function legalMoves(state: GameState): Move[] {
           moves.push({ type: 'playJoker', seat, cardId: card.id, color: color.id });
         }
       } else if (card.kind === 'building') {
+        // جنب البنك بدون طقم، أو على أي طقم كامل.
+        moves.push({ type: 'playBuilding', seat, cardId: card.id });
         for (const color of complete) {
           moves.push({ type: 'playBuilding', seat, cardId: card.id, color });
         }
       } else if (card.kind === 'rent') {
+        moves.push({ type: 'burnAction', seat, cardId: card.id });
         const def: RentDef | undefined = RENTS.find((d) => d.id === card.rent);
         if (!def) continue;
         const colors = def.colors === 'any' ? COLORS.map((c) => c.id) : def.colors;
@@ -925,9 +937,10 @@ export function legalMoves(state: GameState): Move[] {
     }
 
     for (const building of player.buildings) {
-      if (building.color !== null) continue;
       for (const color of complete) {
-        moves.push({ type: 'placeBuilding', seat, cardId: building.card.id, color });
+        if (color !== building.color) {
+          moves.push({ type: 'placeBuilding', seat, cardId: building.card.id, color });
+        }
       }
     }
   }

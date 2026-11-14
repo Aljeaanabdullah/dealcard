@@ -504,6 +504,27 @@ describe('حرق كرت الأكشن', () => {
     expect(player(state, ME).hand).toHaveLength(0);
   });
 
+  it('كرت الإيجار ودوبل ايجار ينحرقون بعد، وينحسبون من الـ3 كروت', () => {
+    let state = readyState(['rent:rentYellowRed:1', 'action:doubleRent:1']);
+    // ما عندي أصفر ولا أحمر: الإيجار ما ينلعب، بس ينحرق
+    expect(legalMoves(state)).toContainEqual({ type: 'burnAction', seat: ME, cardId: 'rent:rentYellowRed:1' });
+    state = must(applyMove(state, { type: 'burnAction', seat: ME, cardId: 'rent:rentYellowRed:1' }));
+    state = must(applyMove(state, { type: 'burnAction', seat: ME, cardId: 'action:doubleRent:1' }));
+    expect(state.firePile.map((c) => c.id)).toEqual(['rent:rentYellowRed:1', 'action:doubleRent:1']);
+    expect(player(state, ME).hand).toHaveLength(0);
+    expect(state.turn.playsUsed).toBe(2);
+    expect(state.pending).toBeNull();
+    expect132(state);
+  });
+
+  it('المباني والعقارات والفلوس ما تنحرق', () => {
+    const state = readyState(['building:plot:1', 'property:red:1', 'money:1:1', 'joker:1']);
+    for (const cardId of ['building:plot:1', 'property:red:1', 'money:1:1', 'joker:1']) {
+      expect(errorOf(applyMove(state, { type: 'burnAction', seat: ME, cardId }))).toBe('wrongCardKind');
+    }
+    expect(legalMoves(state).some((m) => m.type === 'burnAction')).toBe(false);
+  });
+
   it('ينرفض على كرت مو أكشن، أو إذا خلصت الـ3 كروت', () => {
     const state = readyState(['money:1:1', 'action:draw2:1']);
     expect(errorOf(applyMove(state, { type: 'burnAction', seat: ME, cardId: 'money:1:1' }))).toBe('wrongCardKind');

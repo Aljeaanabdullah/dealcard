@@ -59,9 +59,28 @@ async function render(transport: Transport | null): Promise<ReactTestRenderer> {
   return renderer;
 }
 
-/** ينشئ غرفة من الواجهة ويرجّع كودها. */
-async function createRoomFromUi(host: MemoryHost, root: ReactTestInstance, name: string): Promise<string> {
+/** يكتب الاسم بنافذة الاسم اللي تطلع أول ما ينفتح التطبيق. */
+async function enterName(root: ReactTestInstance, name: string): Promise<void> {
   await type(root, 'name-input', name);
+  expect(await press(root, 'name-save')).toBe(true);
+}
+
+/** يكمل أي نافذة مفتوحة: تأكيد، أو أول خيار، أو دفع تلقائي. */
+async function resolveModal(root: ReactTestInstance): Promise<boolean> {
+  if (await press(root, 'option-confirm')) return true;
+  if (await press(root, 'option-0')) return true;
+  if (await press(root, 'pay-auto')) {
+    await press(root, 'pay-confirm');
+    return true;
+  }
+  return false;
+}
+
+/** ينشئ غرفة من الواجهة ويرجّع كودها. الكود يتكوّن عشوائي من الخادم. */
+async function createRoomFromUi(host: MemoryHost, root: ReactTestInstance, name: string): Promise<string> {
+  await enterName(root, name);
+  // ما فيه خانة كود بالرئيسية: اللاعب ما يكتب كود عشان ينشئ غرفة.
+  expect(root.findAll((node) => node.props.testID === 'code-input')).toHaveLength(0);
   expect(await press(root, 'create-room')).toBe(true);
   expect(hasText(root, S.lobbyTitle)).toBe(true);
   const codeNode = root.findAll(
@@ -87,23 +106,33 @@ describe('الرئيسية', () => {
     expect(hasText(root, S.onlineUnavailable)).toBe(true);
     expect(pressables(root, 'create-room')).toHaveLength(0);
     expect(pressables(root, 'join-room')).toHaveLength(0);
-    expect(pressables(root, 'start-go')).toHaveLength(1);
+    expect(pressables(root, 'home-bots')).toHaveLength(1);
     act(() => renderer.unmount());
   });
 
-  it('الدخول بكود غلط أو بدون اسم يطلّع رسالة خطأ', async () => {
+  it('الدخول بكود غلط يطلّع رسالة خطأ', async () => {
     const host = createMemoryHost(1, () => Date.now());
     const renderer = await render(host.transportFor('me'));
     const root = renderer.root;
 
-    await type(root, 'name-input', 'سالم');
+    await enterName(root, 'سالم');
+    expect(await press(root, 'join-room')).toBe(true);
     await type(root, 'code-input', 'zzzzz');
-    await press(root, 'join-room');
+    await press(root, 'join-go');
     expect(hasText(root, S.netError('notInRoom'))).toBe(true);
+    act(() => renderer.unmount());
+  });
 
-    await type(root, 'name-input', '');
+  it('بدون اسم: إنشاء غرفة يطلب الاسم أول بدل ما ينشئ', async () => {
+    const host = createMemoryHost(1, () => Date.now());
+    const renderer = await render(host.transportFor('me'));
+    const root = renderer.root;
+
+    await press(root, 'dialog-close');
+    expect(hasText(root, S.enterName)).toBe(false);
     await press(root, 'create-room');
-    expect(hasText(root, S.netError('nameRequired'))).toBe(true);
+    expect(hasText(root, S.enterName)).toBe(true);
+    expect(hasText(root, S.lobbyTitle)).toBe(false);
     act(() => renderer.unmount());
   });
 });
@@ -117,9 +146,10 @@ describe('غرفة خاصة بكود', () => {
 
     // اللاعب الثاني يدخل بالكود من تطبيقه
     const theirs = await render(host.transportFor('friend'));
-    await type(theirs.root, 'name-input', 'خالد');
-    await type(theirs.root, 'code-input', code.toLowerCase());
+    await enterName(theirs.root, 'خالد');
     expect(await press(theirs.root, 'join-room')).toBe(true);
+    await type(theirs.root, 'code-input', code.toLowerCase());
+    expect(await press(theirs.root, 'join-go')).toBe(true);
     expect(hasText(theirs.root, S.lobbyTitle)).toBe(true);
     expect(hasText(theirs.root, S.waitingHost)).toBe(true);
     // اللي مو صاحب الغرفة ما عنده زر بدء ولا يغيّر شرط الفوز
@@ -144,7 +174,7 @@ describe('غرفة خاصة بكود', () => {
     const renderer = await render(host.transportFor('me'));
     const code = await createRoomFromUi(host, renderer.root, 'سالم');
     await press(renderer.root, 'lobby-leave');
-    expect(pressables(renderer.root, 'start-go')).toHaveLength(1);
+    expect(pressables(renderer.root, 'home-bots')).toHaveLength(1);
     expect(host.roomOf(code)?.seats).toHaveLength(0);
     act(() => renderer.unmount());
   });
@@ -185,12 +215,10 @@ describe('غرفة خاصة بكود', () => {
         await act(async () => {
           await friend.sendMove(code, friendMove);
         });
-      } else if (await press(root, 'option-0')) {
-        // خيار بنافذة
+      } else if (await resolveModal(root)) {
+        // خيار بنافذة (حركة أو رد أو اختيار هدف أو دفع)
       } else if (await press(root, 'option-cancel')) {
         // كرت ما له لعبة
-      } else if (await press(root, 'pay-auto')) {
-        await press(root, 'pay-confirm');
       } else if (await press(root, 'draw')) {
         myTurns++;
         tries = 0;

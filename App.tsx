@@ -24,6 +24,8 @@ interface AppProps {
 export default function App({ transport }: AppProps) {
   const [net] = useState<Transport | null>(() => (transport === undefined ? createSupabaseTransport() : transport));
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
+  // الاسم المستعار ينكتب مرة وحدة ويبقى طول ما التطبيق مفتوح.
+  const [name, setName] = useState('');
   const goHome = () => setScreen({ kind: 'home' });
 
   return (
@@ -36,6 +38,8 @@ export default function App({ transport }: AppProps) {
       ) : (
         <HomeScreen
           transport={net}
+          name={name}
+          onNameChange={setName}
           // بذرة الخلط تجي من الواجهة (الوقت الحالي)؛ المحرك نفسه ما يستخدم وقت النظام.
           onPlayBots={(winTarget) => setScreen({ kind: 'bots', winTarget, seed: Date.now() % 2147483647 })}
           onEnterRoom={(snapshot) => setScreen({ kind: 'online', snapshot })}

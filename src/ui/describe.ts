@@ -119,6 +119,25 @@ function join(parts: (string | undefined | false)[]): string {
   return parts.filter((part): part is string => typeof part === 'string' && part.length > 0).join(' · ');
 }
 
+/** يلقى الكرت من معرّفه (المعرّفات ثابتة). */
+export function cardById(cardId: string | undefined): Card | undefined {
+  return findCard(cardId);
+}
+
+/** نص تأثير الكرت مثل ما هو في prd.md. */
+export function effectText(card: Card): string {
+  if (card.kind === 'action') return S.effect[card.action] ?? '';
+  if (card.kind === 'rent') return S.effect.rent ?? '';
+  return '';
+}
+
+/** الكرت اللي يمثل الأكشن المنتظر بنافذة الرد: الكرت الملعوب نفسه إذا معروف، وإلا كرت من نفس النوع. */
+export function attackCard(action: ActionId | 'rent', lastAttack: Move | null): Card | undefined {
+  const played = lastAttack && 'cardId' in lastAttack ? findCard(lastAttack.cardId) : undefined;
+  if (played && (action === 'rent' ? played.kind === 'rent' : played.kind === 'action')) return played;
+  return findCard(action === 'rent' ? 'rent:rentOne:1' : `action:${action}:1`);
+}
+
 /** المقاعد اللي انلعب عليها الكرت (عشان ينحط عليهم سهم بالطاولة). */
 export function moveTargets(move: Move | null): number[] {
   if (!move) return [];
@@ -151,6 +170,7 @@ export function describeMove(move: Move, state: GameState, naming: Naming): stri
     case 'moveJoker':
       return S.moveJokerTo(colorName(move.color));
     case 'playBuilding':
+      return move.color === undefined ? S.buildLoose : S.buildOn(colorName(move.color));
     case 'placeBuilding':
       return S.buildOn(colorName(move.color));
     case 'burnAction':
@@ -180,7 +200,7 @@ export function describeMove(move: Move, state: GameState, naming: Naming): stri
           (move.targetCardIds !== undefined ? S.inColor(colorName(move.color)) : S.takes(S.wholeSet(colorName(move.color)))),
         move.handIndex !== undefined && S.handCard(move.handIndex + 1),
         picks,
-      ]);
+      ]) || S.playIt;
     }
     case 'respond': {
       if (move.cardId === undefined) return S.noResponse;
