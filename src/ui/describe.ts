@@ -1,5 +1,9 @@
 // معلومات عرض الكروت، ووصف الحركات والتأثيرات كنص للاعب.
 
+import { pickBotNames } from '../bot/names';
+import { BOT_AVATAR, DEFAULT_AVATAR } from '../data/avatars';
+import { PLAYER_COUNT } from '../data/rules';
+import { createRng } from '../engine/rng';
 import { ACTIONS, buildDeck, BUILDINGS, RENTS, type ActionId, type Card } from '../data/cards';
 import { getColor, type ColorId } from '../data/colors';
 import type { Move } from '../engine/moves';
@@ -15,6 +19,10 @@ export const HUMAN_SEAT = 0;
 export interface Naming {
   readonly mySeat: number;
   readonly names: readonly string[];
+  /** أي المقاعد بوتات (بدون تحديد: المقعد اللي اسمه فاضي) */
+  readonly bots?: readonly boolean[];
+  /** شخصية كل مقعد (بدون تحديد: الافتراضية لي، والروبوت للباقين) */
+  readonly avatars?: readonly number[];
 }
 
 /** التسمية باللعب المحلي: أنا بالمقعد 0 والباقي بوتات. */
@@ -23,7 +31,27 @@ export const LOCAL_NAMING: Naming = { mySeat: HUMAN_SEAT, names: ['', '', '', ''
 export function seatName(seat: number, naming: Naming): string {
   if (seat === naming.mySeat) return S.you;
   const name = naming.names[seat] ?? '';
-  return name.length > 0 ? name : S.bot(seat);
+  if (name.length === 0) return S.bot(seat);
+  // البوت يبان باسمه ويمّه إيموجي.
+  return naming.bots?.[seat] === true ? S.botName(name) : name;
+}
+
+/** شخصية اللاعب بالمقعد. */
+export function seatAvatar(seat: number, naming: Naming): number {
+  const avatar = naming.avatars?.[seat];
+  if (avatar !== undefined) return avatar;
+  return seat === naming.mySeat ? DEFAULT_AVATAR : BOT_AVATAR;
+}
+
+/** التسمية بمباراة محلية: أنا بالمقعد 0، والبوتات الثلاثة ياخذون أسماء عشوائية من القائمة (مبذورة). */
+export function localNaming(seed: number, avatar: number): Naming {
+  const botNames = pickBotNames(createRng(seed + 1), PLAYER_COUNT - 1);
+  return {
+    mySeat: HUMAN_SEAT,
+    names: ['', ...botNames],
+    bots: [false, ...botNames.map(() => true)],
+    avatars: [avatar, ...botNames.map(() => BOT_AVATAR)],
+  };
 }
 
 export function colorName(color: ColorId): string {

@@ -6,7 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { cardValue } from '../engine/payment';
 import { completeColors } from '../engine/sets';
 import type { GameState } from '../engine/state';
-import { seatName, type Naming } from './describe';
+import { Avatar } from './Avatar';
+import { seatAvatar, seatName, type Naming } from './describe';
 import { S } from './strings';
 import { SET_COLORS, theme } from './theme';
 
@@ -33,6 +34,7 @@ export function EndScreen({ game, naming, onPlayAgain, onExit }: EndScreenProps)
     <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.winner}>
         <Text style={styles.label}>{S.winner}</Text>
+        <Avatar avatar={seatAvatar(game.winner ?? 0, naming)} size={64} selected />
         <Text style={styles.winnerName}>{game.winner === naming.mySeat ? S.youWon : seatName(game.winner ?? 0, naming)}</Text>
         <Text style={styles.text}>{S.completed(winnerSets.length)}</Text>
         <View style={styles.swatches}>

@@ -1404,6 +1404,29 @@ function chooseMove(state, seat, rng) {
   return best[randomInt(rng, best.length)] ?? null;
 }
 
+// src/data/bots.ts
+var BOT_NAMES = ["bo hany", "Thyab", "Bo3zozQ8", "Bo3thab", "Miry", "komar"];
+
+// src/bot/names.ts
+function pickBotNames(rng, count, taken = []) {
+  let pool = BOT_NAMES.filter((name) => !taken.includes(name));
+  const picked = [];
+  while (picked.length < count) {
+    if (pool.length === 0) pool = BOT_NAMES.slice();
+    const [name] = pool.splice(randomInt(rng, pool.length), 1);
+    if (name !== void 0) picked.push(name);
+  }
+  return picked;
+}
+
+// src/data/avatars.ts
+var AVATAR_COUNT = 12;
+var DEFAULT_AVATAR = 0;
+var BOT_AVATAR = -1;
+function normalizeAvatar(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < AVATAR_COUNT ? value : DEFAULT_AVATAR;
+}
+
 // src/engine/state.ts
 function createGame(seed, winTarget) {
   const rng = createRng(seed);
@@ -1499,7 +1522,7 @@ function generateRoomCode(rng) {
 function seatOf(room, playerId) {
   return room.seats.findIndex((seat) => seat.playerId === playerId);
 }
-function createRoom(code, hostId, name) {
+function createRoom(code, hostId, name, avatar = DEFAULT_AVATAR) {
   if (name.trim().length === 0) return fail2("nameRequired");
   return {
     ok: true,
@@ -1508,7 +1531,7 @@ function createRoom(code, hostId, name) {
       hostId,
       winTarget: WIN_TARGETS[0],
       status: "lobby",
-      seats: [{ playerId: hostId, name: name.trim(), isBot: false, connected: true }],
+      seats: [{ playerId: hostId, name: name.trim(), avatar: normalizeAvatar(avatar), isBot: false, connected: true }],
       game: null,
       lastMove: null,
       lastAttack: null,
@@ -1518,26 +1541,29 @@ function createRoom(code, hostId, name) {
     }
   };
 }
-function joinRoom(room, playerId, name) {
+function joinRoom(room, playerId, name, avatar = DEFAULT_AVATAR) {
   if (name.trim().length === 0) return fail2("nameRequired");
   if (seatOf(room, playerId) >= 0) return fail2("alreadyJoined");
   if (room.status !== "lobby") return fail2("alreadyStarted");
   if (room.seats.length >= PLAYER_COUNT) return fail2("roomFull");
   return {
     ok: true,
-    room: { ...room, seats: [...room.seats, { playerId, name: name.trim(), isBot: false, connected: true }] }
+    room: {
+      ...room,
+      seats: [...room.seats, { playerId, name: name.trim(), avatar: normalizeAvatar(avatar), isBot: false, connected: true }]
+    }
   };
 }
-function createMatchRoom(code, playerId, name, winTarget, seed, now) {
+function createMatchRoom(code, playerId, name, winTarget, seed, now, avatar = DEFAULT_AVATAR) {
   const target = WIN_TARGETS.find((allowed) => allowed === winTarget);
   if (target === void 0) return fail2("invalidWinTarget");
-  const created = createRoom(code, playerId, name);
+  const created = createRoom(code, playerId, name, avatar);
   if (!created.ok) return created;
   return { ok: true, room: { ...created.room, winTarget: target, match: { openedAt: now, seed } } };
 }
-function joinMatchRoom(room, playerId, name, now) {
+function joinMatchRoom(room, playerId, name, now, avatar = DEFAULT_AVATAR) {
   if (!room.match) return fail2("notInRoom");
-  const joined = joinRoom(room, playerId, name);
+  const joined = joinRoom(room, playerId, name, avatar);
   if (!joined.ok) return joined;
   return joined.room.seats.length >= PLAYER_COUNT ? begin(joined.room, room.match.seed, now) : joined;
 }
@@ -1564,8 +1590,13 @@ function startRoom(room, playerId, seed, now) {
 function begin(room, seed, now) {
   if (room.status !== "lobby") return fail2("alreadyStarted");
   const seats = [...room.seats];
-  while (seats.length < PLAYER_COUNT) {
-    seats.push({ playerId: null, name: "", isBot: true, connected: true });
+  const botNames = pickBotNames(
+    createRng(seed + 1),
+    PLAYER_COUNT - seats.length,
+    seats.map((seat) => seat.name)
+  );
+  for (const name of botNames) {
+    seats.push({ playerId: null, name, avatar: BOT_AVATAR, isBot: true, connected: true });
   }
   const rng = createRng(seed);
   const game = createGame(seed, room.winTarget);
@@ -1616,11 +1647,18 @@ function leaveRoom(room, playerId) {
     const nextHost = seats[0]?.playerId ?? room.hostId;
     return { ok: true, room: { ...room, seats, hostId: playerId === room.hostId ? nextHost : room.hostId } };
   }
+  const [botName] = pickBotNames(
+    createRng(room.botSeed + seat + 1),
+    1,
+    room.seats.map((s) => s.name)
+  );
   return {
     ok: true,
     room: {
       ...room,
-      seats: room.seats.map((s, index) => index === seat ? { ...s, playerId: null, isBot: true, connected: false } : s)
+      seats: room.seats.map(
+        (s, index) => index === seat ? { ...s, playerId: null, name: botName ?? s.name, avatar: BOT_AVATAR, isBot: true, connected: false } : s
+      )
     }
   };
 }
@@ -1678,7 +1716,12 @@ function snapshotFor(room, playerId) {
     winTarget: room.winTarget,
     mySeat,
     isHost: playerId === room.hostId,
-    seats: room.seats.map((seat) => ({ name: seat.name, isBot: seat.isBot, connected: seat.connected })),
+    seats: room.seats.map((seat) => ({
+      name: seat.name,
+      avatar: seat.isBot ? BOT_AVATAR : normalizeAvatar(seat.avatar),
+      isBot: seat.isBot,
+      connected: seat.connected
+    })),
     state: game ? maskStateFor(game, mySeat) : null,
     moves: game ? legalMoves(game).filter((move) => move.seat === mySeat) : [],
     lastMove: room.lastMove,

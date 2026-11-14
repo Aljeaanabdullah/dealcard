@@ -3,6 +3,7 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 import App from '../../../App';
+import { BOT_NAMES } from '../../data/bots';
 import { allCards } from '../../engine/state';
 import { createMemoryHost, type MemoryHost } from '../../net/memoryHost';
 import type { RoomSnapshot } from '../../net/room';
@@ -44,6 +45,17 @@ function hasText(root: ReactTestInstance, text: string): boolean {
   return root.findAll((node) => typeof node.type === 'string' && node.children.some((child) => child === text)).length > 0;
 }
 
+/** أسماء البوتات الظاهرة على الشاشة: اسم من القائمة ويمّه إيموجي الروبوت. */
+function botLabels(root: ReactTestInstance): string[] {
+  const labels = new Set<string>();
+  for (const node of root.findAll((n) => typeof n.type === 'string')) {
+    for (const child of node.children) {
+      if (typeof child === 'string' && BOT_NAMES.some((name) => child === S.botName(name))) labels.add(child);
+    }
+  }
+  return [...labels];
+}
+
 async function advance(ms: number): Promise<void> {
   await act(async () => {
     jest.advanceTimersByTime(ms);
@@ -53,7 +65,7 @@ async function advance(ms: number): Promise<void> {
 async function render(transport: Transport | null): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | undefined;
   await act(async () => {
-    renderer = create(<App transport={transport} />);
+    renderer = create(<App transport={transport} splashMs={0} />);
   });
   if (!renderer) throw new Error('التطبيق ما انعرض');
   return renderer;
@@ -201,8 +213,7 @@ describe('غرفة خاصة بكود', () => {
     // الطاولة: لاعبين + بوتين
     expect(hasText(root, S.drawPile)).toBe(true);
     expect(hasText(root, 'خالد')).toBe(true);
-    expect(hasText(root, S.bot(2))).toBe(true);
-    expect(hasText(root, S.bot(3))).toBe(true);
+    expect(botLabels(root)).toHaveLength(2);
     // يدي 5 كروت، وأيدي الباقين ما تنعرض
     expect(pressables(root, 'hand-')).toHaveLength(5);
 
@@ -288,9 +299,7 @@ describe('اللعب العشوائي', () => {
     await advance(2000);
     expect(hasText(root, S.searching)).toBe(false);
     expect(hasText(root, S.drawPile)).toBe(true);
-    expect(hasText(root, S.bot(1))).toBe(true);
-    expect(hasText(root, S.bot(2))).toBe(true);
-    expect(hasText(root, S.bot(3))).toBe(true);
+    expect(botLabels(root)).toHaveLength(3);
     expect(pressables(root, 'hand-')).toHaveLength(5);
     act(() => renderer.unmount());
   });

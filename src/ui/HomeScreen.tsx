@@ -6,24 +6,47 @@ import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AVATAR_COUNT } from '../data/avatars';
 import { WIN_TARGETS, type WinTarget } from '../data/rules';
+import type { Account, Profile } from '../net/account';
 import type { RoomSnapshot } from '../net/room';
 import type { NetResult, Transport } from '../net/transport';
+import { Avatar } from './Avatar';
 import { S } from './strings';
 import { theme } from './theme';
 
 interface HomeScreenProps {
   /** null = اللعب أونلاين مو مجهز */
   readonly transport: Transport | null;
+  /** null = الحسابات مو مجهزة (اللعب كضيف فقط) */
+  readonly account: Account | null;
   readonly name: string;
-  readonly onNameChange: (name: string) => void;
+  readonly avatar: number;
+  /** إيميل الحساب إذا اللاعب مسجل دخوله، أو null للضيف */
+  readonly email: string | null;
+  readonly onProfileChange: (profile: Profile) => void;
+  readonly onSignedIn: (email: string, profile: Profile) => void;
+  readonly onSignedOut: () => void;
   readonly onPlayBots: (winTarget: WinTarget) => void;
   readonly onEnterRoom: (snapshot: RoomSnapshot) => void;
 }
 
-type Dialog = 'name' | 'bots' | 'join' | 'random' | null;
+type Dialog = 'name' | 'bots' | 'join' | 'random' | 'avatar' | 'account' | null;
 
-export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterRoom }: HomeScreenProps) {
+const AVATARS = Array.from({ length: AVATAR_COUNT }, (_, index) => index);
+
+export function HomeScreen({
+  transport,
+  account,
+  name,
+  avatar,
+  email,
+  onProfileChange,
+  onSignedIn,
+  onSignedOut,
+  onPlayBots,
+  onEnterRoom,
+}: HomeScreenProps) {
   // الاسم ينكتب مرة وحدة أول ما ينفتح التطبيق.
   const [dialog, setDialog] = useState<Dialog>(name === '' ? 'name' : null);
   const [draftName, setDraftName] = useState(name);
@@ -31,6 +54,36 @@ export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterR
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // خانات الحساب: كلمة السر تبقى بهالنافذة فقط وتنمسح بعد الإرسال.
+  const [draftEmail, setDraftEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [accountNote, setAccountNote] = useState('');
+
+  /** دخول أو حساب جديد بالإيميل وكلمة السر. */
+  const submitAccount = (mode: 'signIn' | 'signUp') => {
+    if (!account || busy) return;
+    setBusy(true);
+    setAccountNote('');
+    const request = mode === 'signIn' ? account.signIn(draftEmail, password) : account.signUp(draftEmail, password, { name, avatar });
+    void request.then((result) => {
+      setBusy(false);
+      setPassword('');
+      if (result.ok) {
+        onSignedIn(result.email, result.profile);
+        setDialog(null);
+      } else {
+        setAccountNote(S.accountError(result.error));
+      }
+    });
+  };
+
+  const signOut = () => {
+    if (!account) return;
+    void account.signOut().then(() => {
+      onSignedOut();
+      setDialog(null);
+    });
+  };
 
   const enter = (request: Promise<NetResult>) => {
     setBusy(true);
@@ -54,20 +107,20 @@ export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterR
       setDialog('name');
       return;
     }
-    enter(transport.createRoom(name));
+    enter(transport.createRoom(name, avatar));
   };
 
   /** لعب عشوائي: اللاعب يختار شرط الفوز (6 أو 8) ثم يدخل طابور المطابقة. */
   const joinRandom = () => {
     if (!transport) return;
     setDialog(null);
-    enter(transport.joinRandom(name, winTarget));
+    enter(transport.joinRandom(name, winTarget, avatar));
   };
 
   const joinRoom = () => {
     if (!transport) return;
     setDialog(null);
-    enter(transport.joinRoom(code, name));
+    enter(transport.joinRoom(code, name, avatar));
   };
 
   return (
@@ -75,9 +128,19 @@ export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterR
       <View style={styles.header}>
         <Text style={styles.logo}>{S.appName}</Text>
         <View style={styles.flex} />
+        <Pressable testID="edit-avatar" accessibilityRole="button" accessibilityLabel={S.chooseAvatar} onPress={() => setDialog('avatar')}>
+          <Avatar avatar={avatar} size={44} />
+        </Pressable>
         <Pressable testID="edit-name" accessibilityRole="button" style={styles.hello} onPress={() => setDialog('name')}>
           <Text style={styles.helloText}>{S.hello(name.trim() === '' ? S.guest : name)}</Text>
         </Pressable>
+        {account ? (
+          <Pressable testID="home-account" accessibilityRole="button" style={styles.settings} onPress={() => setDialog('account')}>
+            <Text style={styles.small} numberOfLines={1}>
+              {email ?? S.account}
+            </Text>
+          </Pressable>
+        ) : null}
         <View style={[styles.settings, styles.disabled]} accessibilityLabel={`${S.settings} · ${S.soon}`}>
           <Text style={styles.small}>{S.settings}</Text>
           <Text style={styles.small}>{S.soon}</Text>
@@ -164,7 +227,7 @@ export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterR
                     accessibilityRole="button"
                     style={styles.primary}
                     onPress={() => {
-                      onNameChange(draftName.trim());
+                      onProfileChange({ name: draftName.trim(), avatar });
                       setDialog(null);
                     }}
                   >
@@ -194,6 +257,90 @@ export function HomeScreen({ transport, name, onNameChange, onPlayBots, onEnterR
                   <Pressable testID="start-go" accessibilityRole="button" style={styles.primary} onPress={() => onPlayBots(winTarget)}>
                     <Text style={styles.primaryText}>{S.start}</Text>
                   </Pressable>
+                </>
+              ) : null}
+
+              {dialog === 'avatar' ? (
+                <>
+                  <Text style={styles.sheetTitle}>{S.chooseAvatar}</Text>
+                  <View style={styles.avatars}>
+                    {AVATARS.map((id) => (
+                      <Pressable
+                        key={id}
+                        testID={`avatar-${id}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={S.avatarLabel(id + 1)}
+                        accessibilityState={{ selected: avatar === id }}
+                        onPress={() => {
+                          onProfileChange({ name, avatar: id });
+                          setDialog(null);
+                        }}
+                      >
+                        <Avatar avatar={id} size={54} selected={avatar === id} />
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              ) : null}
+
+              {dialog === 'account' && email !== null ? (
+                <>
+                  <Text style={styles.sheetTitle}>{S.account}</Text>
+                  <Text style={styles.small}>{S.signedInAs(email)}</Text>
+                  <Pressable testID="account-signout" accessibilityRole="button" style={styles.primary} onPress={signOut}>
+                    <Text style={styles.primaryText}>{S.signOut}</Text>
+                  </Pressable>
+                </>
+              ) : null}
+
+              {dialog === 'account' && email === null ? (
+                <>
+                  <Text style={styles.sheetTitle}>{S.account}</Text>
+                  <Text style={styles.small}>{accountNote === '' ? S.accountHint : accountNote}</Text>
+                  <TextInput
+                    testID="email-input"
+                    accessibilityLabel={S.email}
+                    style={styles.input}
+                    placeholder={S.email}
+                    placeholderTextColor={theme.muted}
+                    value={draftEmail}
+                    onChangeText={setDraftEmail}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    maxLength={120}
+                  />
+                  <TextInput
+                    testID="password-input"
+                    accessibilityLabel={S.password}
+                    style={styles.input}
+                    placeholder={S.password}
+                    placeholderTextColor={theme.muted}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    maxLength={72}
+                  />
+                  <View style={styles.row}>
+                    <Pressable
+                      testID="account-signin"
+                      accessibilityRole="button"
+                      style={[styles.primary, styles.flex]}
+                      onPress={() => submitAccount('signIn')}
+                    >
+                      <Text style={styles.primaryText}>{S.signIn}</Text>
+                    </Pressable>
+                    <Pressable
+                      testID="account-signup"
+                      accessibilityRole="button"
+                      style={[styles.secondary, styles.flex]}
+                      onPress={() => submitAccount('signUp')}
+                    >
+                      <Text style={styles.secondaryText}>{S.signUp}</Text>
+                    </Pressable>
+                  </View>
                 </>
               ) : null}
 
@@ -380,6 +527,12 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
+    gap: 8,
+  },
+  avatars: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: 8,
   },
   choice: {

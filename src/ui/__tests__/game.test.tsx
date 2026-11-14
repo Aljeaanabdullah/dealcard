@@ -4,6 +4,7 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 import App from '../../../App';
+import { BOT_NAMES } from '../../data/bots';
 import { S } from '../strings';
 
 // منطقة النوتش تحتاج قياسات الجهاز؛ بالاختبار نستخدم بديل المكتبة الجاهز.
@@ -46,6 +47,17 @@ function hasText(root: ReactTestInstance, text: string): boolean {
   return root.findAll((node) => typeof node.type === 'string' && node.children.some((child) => child === text)).length > 0;
 }
 
+/** أسماء البوتات الظاهرة على الشاشة: اسم من القائمة ويمّه إيموجي الروبوت. */
+function botLabels(root: ReactTestInstance): string[] {
+  const labels = new Set<string>();
+  for (const node of root.findAll((n) => typeof n.type === 'string')) {
+    for (const child of node.children) {
+      if (typeof child === 'string' && BOT_NAMES.some((name) => child === S.botName(name))) labels.add(child);
+    }
+  }
+  return [...labels];
+}
+
 function advance(ms: number): void {
   act(() => {
     jest.advanceTimersByTime(ms);
@@ -56,7 +68,7 @@ function startGame(seed: number): ReactTestRenderer {
   jest.spyOn(Date, 'now').mockReturnValue(seed);
   let renderer: ReactTestRenderer | undefined;
   act(() => {
-    renderer = create(<App transport={null} />);
+    renderer = create(<App transport={null} splashMs={0} />);
   });
   if (!renderer) throw new Error('التطبيق ما انعرض');
   const root = renderer.root;
@@ -93,7 +105,7 @@ describe('واجهة اللعب ضد البوتات', () => {
     jest.spyOn(Date, 'now').mockReturnValue(1001);
     let home: ReactTestRenderer | undefined;
     act(() => {
-      home = create(<App transport={null} />);
+      home = create(<App transport={null} splashMs={0} />);
     });
     if (!home) throw new Error('التطبيق ما انعرض');
     for (const title of [S.randomPlay, S.createRoom, S.joinTitle, S.playVsBots]) {
@@ -108,9 +120,9 @@ describe('واجهة اللعب ضد البوتات', () => {
     const root = renderer.root;
     expect(hasText(root, S.drawPile)).toBe(true);
     expect(hasText(root, S.fire)).toBe(true);
-    expect(hasText(root, S.bot(1))).toBe(true);
-    expect(hasText(root, S.bot(2))).toBe(true);
-    expect(hasText(root, S.bot(3))).toBe(true);
+    // البوتات الثلاثة بأسماء من القائمة ويمّها إيموجي الروبوت (مو "بوت 1، بوت 2، بوت 3")
+    expect(botLabels(root)).toHaveLength(3);
+    expect(hasText(root, S.bot(1))).toBe(false);
     // يدي فيها 5 كروت بالبداية
     expect(pressables(root, 'hand-').length).toBe(5);
     act(() => renderer.unmount());

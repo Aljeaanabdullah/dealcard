@@ -66,6 +66,8 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({}));
   const action = String(body.action ?? '');
+  // رقم الشخصية اللي اختارها اللاعب؛ المحرك يرجّع أي قيمة غلط للافتراضية.
+  const avatar = Number(body.avatar);
   const now = Date.now();
 
   /** يحفظ الغرفة (مع فحص النسخة) ويكتب لقطة كل لاعب بشري. */
@@ -107,7 +109,7 @@ Deno.serve(async (req) => {
     // نجرب أكثر من كود لين نلقى واحد مو مستخدم.
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = generateRoomCode(createRng(randomSeed()));
-      const created = createRoom(code, playerId, String(body.name ?? ''));
+      const created = createRoom(code, playerId, String(body.name ?? ''), avatar);
       if (!created.ok) return json(created);
       if (await save(created.room, null)) return json({ ok: true, snapshot: snapshotFor(created.room, playerId) });
     }
@@ -146,7 +148,7 @@ Deno.serve(async (req) => {
         .pop();
 
       if (open) {
-        const joined: ActionResult = joinMatchRoom(open.state, playerId, name, now);
+        const joined: ActionResult = joinMatchRoom(open.state, playerId, name, now, avatar);
         if (!joined.ok) return json(joined);
         if (!joined.room) return json({ ok: false, error: 'network' }, 500);
         // إذا لاعب ثاني دخل بنفس اللحظة نعيد المحاولة.
@@ -154,7 +156,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const created: ActionResult = createMatchRoom(generateRoomCode(createRng(randomSeed())), playerId, name, winTarget, randomSeed(), now);
+      const created: ActionResult = createMatchRoom(generateRoomCode(createRng(randomSeed())), playerId, name, winTarget, randomSeed(), now, avatar);
       if (!created.ok) return json(created);
       if (!created.room) return json({ ok: false, error: 'network' }, 500);
       if (await save(created.room, null)) return json({ ok: true, snapshot: snapshotFor(created.room, playerId) });
@@ -174,7 +176,7 @@ Deno.serve(async (req) => {
     let result: ActionResult;
     switch (action) {
       case 'join':
-        result = joinRoom(room, playerId, String(body.name ?? ''));
+        result = joinRoom(room, playerId, String(body.name ?? ''), avatar);
         break;
       case 'setWinTarget':
         result = setWinTarget(room, playerId, Number(body.winTarget));

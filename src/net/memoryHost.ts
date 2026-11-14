@@ -66,16 +66,16 @@ export function createMemoryHost(seed: number, now: () => number): MemoryHost {
   return {
     roomOf: (code) => rooms.get(code),
     transportFor: (playerId) => ({
-      createRoom: async (name) => {
+      createRoom: async (name, avatar) => {
         let code = generateRoomCode(createRng(random()));
         while (rooms.has(code)) code = generateRoomCode(createRng(random()));
-        return commit(createRoom(code, playerId, name), playerId);
+        return commit(createRoom(code, playerId, name, avatar), playerId);
       },
-      joinRoom: async (code, name) => withRoom(code, playerId, (room) => joinRoom(room, playerId, name)),
-      joinRandom: async (name, winTarget) => {
+      joinRoom: async (code, name, avatar) => withRoom(code, playerId, (room) => joinRoom(room, playerId, name, avatar)),
+      joinRandom: async (name, winTarget, avatar) => {
         let code = generateRoomCode(createRng(random()));
         while (rooms.has(code)) code = generateRoomCode(createRng(random()));
-        const matched = joinRandomMatch([...rooms.values()], playerId, name, winTarget, code, random(), now());
+        const matched = joinRandomMatch([...rooms.values()], playerId, name, winTarget, code, random(), now(), avatar);
         return matched.ok ? commit({ ok: true, room: matched.room }, playerId) : matched;
       },
       setWinTarget: async (code, winTarget) => withRoom(code, playerId, (room) => setWinTarget(room, playerId, winTarget)),

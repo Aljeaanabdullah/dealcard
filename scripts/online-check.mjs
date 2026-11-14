@@ -33,10 +33,13 @@ const c = await guest('C');
 console.log('دخول 3 ضيوف نجح');
 
 // إنشاء غرفة ودخول بالكود
-const created = await a.call({ action: 'create', name: 'لاعب أ' });
+const created = await a.call({ action: 'create', name: 'لاعب أ', avatar: 5 });
 check(created.ok && created.snapshot.status === 'lobby', `إنشاء غرفة: ${JSON.stringify(created.error ?? created.snapshot.code)}`);
 const code = created.snapshot.code;
-check((await b.call({ action: 'join', code: code.toLowerCase(), name: 'لاعب ب' })).ok, 'دخول لاعب ثاني بالكود');
+check(created.snapshot.seats[0].avatar === 5, 'شخصية اللاعب انحفظت بالغرفة');
+const joinedB = await b.call({ action: 'join', code: code.toLowerCase(), name: 'لاعب ب', avatar: 99 });
+check(joinedB.ok, 'دخول لاعب ثاني بالكود');
+check(joinedB.snapshot.seats[1].avatar === 0, 'رقم شخصية غلط يرجع للافتراضية');
 check((await b.call({ action: 'join', code: 'ZZZZZ', name: 'x' })).error === 'notInRoom', 'كود غلط ينرفض');
 
 // الصلاحيات
@@ -54,6 +57,10 @@ check(views.data?.length === 1 && views.data[0].user_id === a.id, 'اللاعب 
 const started = await a.call({ action: 'start', code });
 check(started.ok && started.snapshot.status === 'playing', 'صاحب الغرفة يبدأ اللعبة');
 check(started.snapshot.seats.map((s) => s.isBot).join() === 'false,false,true,true', 'البوتات تكمل العدد إلى 4');
+const BOT_NAMES = ['bo hany', 'Thyab', 'Bo3zozQ8', 'Bo3thab', 'Miry', 'komar'];
+const botSeats = started.snapshot.seats.filter((s) => s.isBot);
+check(botSeats.every((s) => BOT_NAMES.includes(s.name) && s.avatar === -1), `البوتات بأسماء من القائمة وشخصية الروبوت: ${botSeats.map((s) => s.name).join('، ')}`);
+check(botSeats[0].name !== botSeats[1].name, 'أسماء البوتات مختلفة');
 
 // إخفاء الأيدي
 const mine = started.snapshot;
@@ -115,6 +122,7 @@ const left = await b.call({ action: 'leave', code });
 check(left.ok, 'خروج لاعب من الغرفة');
 const after = await a.call({ action: 'view', code });
 check(after.snapshot.seats[1].isBot === true, 'البوت استلم مكان اللاعب اللي طلع');
+check(BOT_NAMES.includes(after.snapshot.seats[1].name), `البوت اللي استلم المكان اسمه من القائمة: ${after.snapshot.seats[1].name}`);
 console.log('انتهت تجربة الغرفة الخاصة');
 
 // ---------------- اللعب العشوائي (المرحلة 9) ----------------

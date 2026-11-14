@@ -3,6 +3,8 @@
 // الوقت يدخل كرقم (now) من الخادم؛ هذا الملف ما يقرأ وقت النظام.
 
 import { chooseMove } from '../bot/bot';
+import { pickBotNames } from '../bot/names';
+import { BOT_AVATAR, DEFAULT_AVATAR, normalizeAvatar } from '../data/avatars';
 import {
   MATCH_WAIT_SECONDS,
   PLAYER_COUNT,
@@ -23,8 +25,10 @@ export const BOT_DELAY_MS = 700;
 export interface Seat {
   /** معرّف اللاعب، أو null للبوت */
   readonly playerId: string | null;
-  /** الاسم المستعار. فاضي للبوت (التطبيق يسميه حسب مقعده). */
+  /** الاسم المستعار. البوت ياخذ اسم عشوائي من قائمة أسماء البوتات. */
   readonly name: string;
+  /** رقم الشخصية اللي اختارها اللاعب، أو BOT_AVATAR للبوت */
+  readonly avatar?: number;
   readonly isBot: boolean;
   readonly connected: boolean;
 }
@@ -89,7 +93,7 @@ function seatOf(room: Room, playerId: string): number {
   return room.seats.findIndex((seat) => seat.playerId === playerId);
 }
 
-export function createRoom(code: string, hostId: string, name: string): RoomResult {
+export function createRoom(code: string, hostId: string, name: string, avatar: number = DEFAULT_AVATAR): RoomResult {
   if (name.trim().length === 0) return fail('nameRequired');
   return {
     ok: true,
@@ -98,7 +102,7 @@ export function createRoom(code: string, hostId: string, name: string): RoomResu
       hostId,
       winTarget: WIN_TARGETS[0],
       status: 'lobby',
-      seats: [{ playerId: hostId, name: name.trim(), isBot: false, connected: true }],
+      seats: [{ playerId: hostId, name: name.trim(), avatar: normalizeAvatar(avatar), isBot: false, connected: true }],
       game: null,
       lastMove: null,
       lastAttack: null,
@@ -109,14 +113,17 @@ export function createRoom(code: string, hostId: string, name: string): RoomResu
   };
 }
 
-export function joinRoom(room: Room, playerId: string, name: string): RoomResult {
+export function joinRoom(room: Room, playerId: string, name: string, avatar: number = DEFAULT_AVATAR): RoomResult {
   if (name.trim().length === 0) return fail('nameRequired');
   if (seatOf(room, playerId) >= 0) return fail('alreadyJoined');
   if (room.status !== 'lobby') return fail('alreadyStarted');
   if (room.seats.length >= PLAYER_COUNT) return fail('roomFull');
   return {
     ok: true,
-    room: { ...room, seats: [...room.seats, { playerId, name: name.trim(), isBot: false, connected: true }] },
+    room: {
+      ...room,
+      seats: [...room.seats, { playerId, name: name.trim(), avatar: normalizeAvatar(avatar), isBot: false, connected: true }],
+    },
   };
 }
 
@@ -132,18 +139,25 @@ export function createMatchRoom(
   winTarget: number,
   seed: number,
   now: number,
+  avatar: number = DEFAULT_AVATAR,
 ): RoomResult {
   const target = WIN_TARGETS.find((allowed) => allowed === winTarget);
   if (target === undefined) return fail('invalidWinTarget');
-  const created = createRoom(code, playerId, name);
+  const created = createRoom(code, playerId, name, avatar);
   if (!created.ok) return created;
   return { ok: true, room: { ...created.room, winTarget: target, match: { openedAt: now, seed } } };
 }
 
 /** لاعب يدخل غرفة لعب عشوائي مفتوحة. إذا اكتمل 4 لاعبين اللعبة تبدأ مباشرة. */
-export function joinMatchRoom(room: Room, playerId: string, name: string, now: number): RoomResult {
+export function joinMatchRoom(
+  room: Room,
+  playerId: string,
+  name: string,
+  now: number,
+  avatar: number = DEFAULT_AVATAR,
+): RoomResult {
   if (!room.match) return fail('notInRoom');
-  const joined = joinRoom(room, playerId, name);
+  const joined = joinRoom(room, playerId, name, avatar);
   if (!joined.ok) return joined;
   return joined.room.seats.length >= PLAYER_COUNT ? begin(joined.room, room.match.seed, now) : joined;
 }
@@ -186,9 +200,15 @@ export function startRoom(room: Room, playerId: string, seed: number, now: numbe
 function begin(room: Room, seed: number, now: number): RoomResult {
   if (room.status !== 'lobby') return fail('alreadyStarted');
 
+  // البوتات تكمل العدد بأسماء عشوائية من القائمة (بذرة مستقلة عن بذرة لعب البوتات).
   const seats: Seat[] = [...room.seats];
-  while (seats.length < PLAYER_COUNT) {
-    seats.push({ playerId: null, name: '', isBot: true, connected: true });
+  const botNames = pickBotNames(
+    createRng(seed + 1),
+    PLAYER_COUNT - seats.length,
+    seats.map((seat) => seat.name),
+  );
+  for (const name of botNames) {
+    seats.push({ playerId: null, name, avatar: BOT_AVATAR, isBot: true, connected: true });
   }
   const rng = createRng(seed);
   const game = createGame(seed, room.winTarget);
@@ -250,11 +270,21 @@ export function leaveRoom(room: Room, playerId: string): RoomResult {
     const nextHost = seats[0]?.playerId ?? room.hostId;
     return { ok: true, room: { ...room, seats, hostId: playerId === room.hostId ? nextHost : room.hostId } };
   }
+  // البوت اللي يستلم المكان ياخذ اسم بوت مو مستخدم بالغرفة.
+  const [botName] = pickBotNames(
+    createRng(room.botSeed + seat + 1),
+    1,
+    room.seats.map((s) => s.name),
+  );
   return {
     ok: true,
     room: {
       ...room,
-      seats: room.seats.map((s, index) => (index === seat ? { ...s, playerId: null, isBot: true, connected: false } : s)),
+      seats: room.seats.map((s, index) =>
+        index === seat
+          ? { ...s, playerId: null, name: botName ?? s.name, avatar: BOT_AVATAR, isBot: true, connected: false }
+          : s,
+      ),
     },
   };
 }
@@ -322,7 +352,12 @@ export interface RoomSnapshot {
   readonly winTarget: WinTarget;
   readonly mySeat: number;
   readonly isHost: boolean;
-  readonly seats: readonly { readonly name: string; readonly isBot: boolean; readonly connected: boolean }[];
+  readonly seats: readonly {
+    readonly name: string;
+    readonly avatar: number;
+    readonly isBot: boolean;
+    readonly connected: boolean;
+  }[];
   /** الحالة بعد إخفاء أيدي الباقين وكومة السحب */
   readonly state: GameState | null;
   /** حركاتي القانونية الحين (يحسبها الخادم) */
@@ -346,7 +381,12 @@ export function snapshotFor(room: Room, playerId: string): RoomSnapshot | null {
     winTarget: room.winTarget,
     mySeat,
     isHost: playerId === room.hostId,
-    seats: room.seats.map((seat) => ({ name: seat.name, isBot: seat.isBot, connected: seat.connected })),
+    seats: room.seats.map((seat) => ({
+      name: seat.name,
+      avatar: seat.isBot ? BOT_AVATAR : normalizeAvatar(seat.avatar),
+      isBot: seat.isBot,
+      connected: seat.connected,
+    })),
     state: game ? maskStateFor(game, mySeat) : null,
     moves: game ? legalMoves(game).filter((move) => move.seat === mySeat) : [],
     lastMove: room.lastMove,

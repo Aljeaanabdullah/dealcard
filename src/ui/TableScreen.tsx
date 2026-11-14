@@ -13,6 +13,7 @@ import type { Move } from '../engine/moves';
 import { cardValue } from '../engine/payment';
 import { completeColors, countInColor, isSetComplete } from '../engine/sets';
 import type { GameState, PlayerState } from '../engine/state';
+import { Avatar } from './Avatar';
 import { CardBack, CardView } from './CardView';
 import {
   attackCard,
@@ -21,6 +22,7 @@ import {
   colorName,
   describeEffect,
   moveTargets,
+  seatAvatar,
   seatName,
   type Naming,
 } from './describe';
@@ -121,7 +123,10 @@ function OpponentPanel({
     >
       <View style={styles.info}>
         {targeted ? <TargetArrow /> : null}
-        <Text style={styles.name}>{seatName(seat, naming)}</Text>
+        <View style={styles.nameRow}>
+          <Avatar avatar={seatAvatar(seat, naming)} size={28} />
+          <Text style={styles.name}>{seatName(seat, naming)}</Text>
+        </View>
         <Text style={styles.small}>
           {S.inHand(player.hand.length)} · {S.bank(bankTotal(player))}
         </Text>
@@ -315,7 +320,10 @@ export function TableScreen({ game, moves, naming, secondsLeft, event, lastAttac
           <ScrollView contentContainerStyle={styles.mineContent}>
             {targets.includes(mySeat) ? <TargetArrow /> : null}
             <View style={styles.between}>
-              <Text style={styles.name}>{S.you}</Text>
+              <View style={styles.nameRow}>
+                <Avatar avatar={seatAvatar(mySeat, naming)} size={28} />
+                <Text style={styles.name}>{S.you}</Text>
+              </View>
               <Text style={styles.sets}>{S.completeSets(completeColors(me.properties).length, game.winTarget)}</Text>
             </View>
             <StatusBadges game={game} seat={mySeat} />
@@ -518,6 +526,12 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontSize: 14,
     fontWeight: '800',
+    flexShrink: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   small: {
     color: theme.muted,

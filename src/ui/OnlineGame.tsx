@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PLAYER_COUNT, WIN_TARGETS } from '../data/rules';
 import type { RoomSnapshot } from '../net/room';
 import type { Transport } from '../net/transport';
+import { Avatar } from './Avatar';
 import { describeEvent, type Naming } from './describe';
 import { S } from './strings';
 import { TableScreen } from './TableScreen';
@@ -36,7 +37,9 @@ export function OnlineGame({ transport, initial, onExit, onEnterRoom }: OnlineGa
 
   const naming: Naming = {
     mySeat: snapshot.mySeat,
-    names: snapshot.seats.map((seat) => (seat.isBot ? '' : seat.name)),
+    names: snapshot.seats.map((seat) => seat.name),
+    bots: snapshot.seats.map((seat) => seat.isBot),
+    avatars: snapshot.seats.map((seat) => seat.avatar),
   };
 
   /** يرسل طلب للخادم ويعرض اللقطة اللي يرجّعها. */
@@ -53,11 +56,12 @@ export function OnlineGame({ transport, initial, onExit, onEnterRoom }: OnlineGa
 
   /** إعادة اللعب بالعشوائي: يطلع من المباراة المنتهية ويدخل الطابور من جديد بنفس شرط الفوز. */
   const playAgain = () => {
-    const myName = snapshot.seats[snapshot.mySeat]?.name ?? '';
+    const mySeat = snapshot.seats[snapshot.mySeat];
+    const myName = mySeat?.name ?? '';
     const target = snapshot.winTarget;
     void transport
       .leave(code)
-      .then(() => transport.joinRandom(myName, target))
+      .then(() => transport.joinRandom(myName, target, mySeat?.avatar))
       .then((result) => {
         if (result.ok && result.snapshot) onEnterRoom(result.snapshot);
         else onExit();
@@ -78,6 +82,7 @@ export function OnlineGame({ transport, initial, onExit, onEnterRoom }: OnlineGa
         <View style={styles.searchSlots}>
           {slots.map((seat, index) => (
             <View key={index} style={[styles.searchSlot, !seat && styles.slotEmpty]}>
+              {seat ? <Avatar avatar={seat.avatar} size={34} /> : null}
               <Text style={styles.name}>{seat ? (index === snapshot.mySeat ? S.you : seat.name) : S.emptySeat}</Text>
             </View>
           ))}
@@ -102,6 +107,7 @@ export function OnlineGame({ transport, initial, onExit, onEnterRoom }: OnlineGa
           <View style={styles.grid}>
             {slots.map((seat, index) => (
               <View key={index} style={[styles.slot, !seat && styles.slotEmpty]}>
+                {seat ? <Avatar avatar={seat.avatar} size={34} /> : null}
                 <Text style={styles.name}>{seat ? (index === snapshot.mySeat ? S.you : seat.name) : S.emptySeat}</Text>
                 <Text style={styles.small}>{seat ? (index === 0 ? S.host : S.joined) : S.botWillFill}</Text>
               </View>
@@ -188,8 +194,9 @@ const styles = StyleSheet.create({
   },
   searchSlot: {
     flex: 1,
-    minHeight: 54,
+    minHeight: 84,
     borderRadius: 12,
+    gap: 4,
     backgroundColor: theme.felt,
     borderWidth: 2,
     borderColor: theme.line,

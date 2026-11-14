@@ -26,6 +26,7 @@ export function joinRandomMatch(
   newCode: string,
   seed: number,
   now: number,
+  avatar?: number,
 ): MatchResult {
   const current = rooms.find((room) => isActiveFor(room, playerId));
   if (current) return { ok: true, room: current, changed: false };
@@ -33,6 +34,8 @@ export function joinRandomMatch(
   const open = rooms
     .filter((room) => isOpenMatch(room, now) && room.winTarget === winTarget)
     .sort((a, b) => (a.match?.openedAt ?? 0) - (b.match?.openedAt ?? 0))[0];
-  const result = open ? joinMatchRoom(open, playerId, name, now) : createMatchRoom(newCode, playerId, name, winTarget, seed, now);
+  const result = open
+    ? joinMatchRoom(open, playerId, name, now, avatar)
+    : createMatchRoom(newCode, playerId, name, winTarget, seed, now, avatar);
   return result.ok ? { ok: true, room: result.room, changed: true } : result;
 }

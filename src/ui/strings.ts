@@ -61,6 +61,8 @@ export const S = {
   // اللاعبين
   you: 'أنت',
   bot: (n: number) => `بوت ${n}`,
+  // اسم البوت ويمّه إيموجي يبيّن إنه كمبيوتر
+  botName: (name: string) => `🤖 ${name}`,
 
   // الطاولة
   yourTurn: 'دورك',
@@ -232,6 +234,36 @@ export const S = {
   setsColumn: 'الأطقم الكاملة',
   bankColumn: 'البنك',
   playAgain: 'إعادة اللعب',
+  // شاشة البداية
+  loading: 'جاري التحميل',
+  // الشخصيات
+  chooseAvatar: 'اختر شخصيتك',
+  avatarLabel: (n: number) => `شخصية ${n}`,
+  // الحساب (اختياري)
+  account: 'تسجيل الدخول',
+  accountHint: 'اختياري: سجّل عشان اسمك وشخصيتك ينحفظون',
+  email: 'الإيميل',
+  password: 'كلمة السر',
+  signIn: 'دخول',
+  signUp: 'حساب جديد',
+  signOut: 'تسجيل خروج',
+  signedInAs: (email: string) => `داخل بحساب: ${email}`,
+  accountError: (code: string): string => {
+    switch (code) {
+      case 'invalidEmail':
+        return 'الإيميل مو صحيح';
+      case 'weakPassword':
+        return 'كلمة السر لازم 6 خانات أو أكثر';
+      case 'wrongLogin':
+        return 'الإيميل أو كلمة السر غلط';
+      case 'emailTaken':
+        return 'هالإيميل مسجل من قبل';
+      case 'confirmEmail':
+        return 'الحساب يحتاج تأكيد الإيميل';
+      default:
+        return 'ما قدرنا نتصل بالخادم';
+    }
+  },
   exitHome: 'خروج للبداية',
   // الخروج من داخل اللعب
   exitGame: 'خروج',

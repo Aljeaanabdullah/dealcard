@@ -10,7 +10,7 @@ import { suggestPayment } from '../engine/payment';
 import { createRng } from '../engine/rng';
 import { createGame, type GameState } from '../engine/state';
 import { forceEndTurn } from '../engine/timeout';
-import { describeEvent, HUMAN_SEAT, LOCAL_NAMING } from './describe';
+import { describeEvent, HUMAN_SEAT, type Naming } from './describe';
 import { S } from './strings';
 
 /** تأخير حركة البوت بالملي ثانية حتى يبدو طبيعياً. */
@@ -18,6 +18,8 @@ const BOT_DELAY_MS = 700;
 
 interface Session {
   readonly game: GameState;
+  /** أسماء اللاعبين بهالمباراة (لوصف الأحداث) */
+  readonly naming: Naming;
   readonly secondsLeft: number;
   readonly event: string;
   readonly error: MoveError | null;
@@ -40,8 +42,9 @@ function reducer(session: Session, action: SessionAction): Session {
       const turnChanged = action.move.type === 'endTurn';
       return {
         game: result.state,
+        naming: session.naming,
         secondsLeft: turnChanged ? TURN_SECONDS : session.secondsLeft,
-        event: describeEvent(action.move, session.game, LOCAL_NAMING),
+        event: describeEvent(action.move, session.game, session.naming),
         error: null,
         lastAttack:
           action.move.type === 'playAction' || action.move.type === 'playRent'
@@ -53,7 +56,7 @@ function reducer(session: Session, action: SessionAction): Session {
     }
     case 'set':
       if (action.expect !== session.game) return session;
-      return { game: action.game, secondsLeft: TURN_SECONDS, event: action.event, error: null, lastAttack: null };
+      return { game: action.game, naming: session.naming, secondsLeft: TURN_SECONDS, event: action.event, error: null, lastAttack: null };
     case 'tick': {
       const myTurn = session.game.turn.seat === HUMAN_SEAT && session.game.winner === null;
       return myTurn && session.secondsLeft > 0 ? { ...session, secondsLeft: session.secondsLeft - 1 } : session;
@@ -71,9 +74,10 @@ export interface GameController {
   readonly play: (move: Move) => void;
 }
 
-export function useGame(winTarget: WinTarget, seed: number): GameController {
+export function useGame(winTarget: WinTarget, seed: number, naming: Naming): GameController {
   const [session, dispatch] = useReducer(reducer, null, (): Session => ({
     game: createGame(seed, winTarget),
+    naming,
     secondsLeft: TURN_SECONDS,
     event: '',
     error: null,

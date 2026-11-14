@@ -12,10 +12,11 @@ export type NetResult =
   | { readonly ok: false; readonly error: NetError };
 
 export interface Transport {
-  createRoom(name: string): Promise<NetResult>;
-  joinRoom(code: string, name: string): Promise<NetResult>;
+  /** avatar = رقم الشخصية اللي اختارها اللاعب (بدون تحديد = الافتراضية) */
+  createRoom(name: string, avatar?: number): Promise<NetResult>;
+  joinRoom(code: string, name: string, avatar?: number): Promise<NetResult>;
   /** لعب عشوائي: يدخل اللاعب طابور المطابقة بشرط الفوز اللي اختاره (6 أو 8). الإلغاء = leave بكود الغرفة اللي رجعت. */
-  joinRandom(name: string, winTarget: number): Promise<NetResult>;
+  joinRandom(name: string, winTarget: number, avatar?: number): Promise<NetResult>;
   setWinTarget(code: string, winTarget: number): Promise<NetResult>;
   start(code: string): Promise<NetResult>;
   sendMove(code: string, move: Move): Promise<NetResult>;
