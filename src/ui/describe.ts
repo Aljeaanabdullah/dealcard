@@ -10,7 +10,7 @@ import type { Move } from '../engine/moves';
 import { cardValue, rentFor } from '../engine/payment';
 import type { Effect, GameState } from '../engine/state';
 import { S } from './strings';
-import { BAND, CARD_FILL, SET_COLORS } from './theme';
+import { BAND, CARD_EMOJI, CARD_FILL, RENT_EMOJI, SET_COLORS } from './theme';
 
 /** مقعد اللاعب باللعب المحلي ضد البوتات. */
 export const HUMAN_SEAT = 0;
@@ -73,6 +73,8 @@ export interface CardInfo {
   readonly stripes?: readonly string[];
   /** لون وجه الكرت كله (كروت اللون الكامل)؛ والكتابة عليه فاتحة */
   readonly fill?: string;
+  /** إيموجي يطلع على وجه الكرت فوق الاسم */
+  readonly emoji?: string;
   readonly kind: string;
   readonly name: string;
   readonly sub: string;
@@ -103,6 +105,7 @@ export function cardInfo(card: Card): CardInfo {
         return {
           band: BAND.rentAny,
           stripes: Object.values(SET_COLORS),
+          emoji: RENT_EMOJI,
           kind: S.kindRent,
           name: S.rentOne,
           sub: S.anyColor,
@@ -113,6 +116,7 @@ export function cardInfo(card: Card): CardInfo {
       return {
         band: first ? SET_COLORS[first] : BAND.rentAny,
         ...(second ? { bandBottom: SET_COLORS[second] } : {}),
+        emoji: RENT_EMOJI,
         kind: S.kindRent,
         name: S.rentAll,
         sub: def.colors.map(colorName).join(' / '),
@@ -122,9 +126,11 @@ export function cardInfo(card: Card): CardInfo {
       const def = ACTIONS.find((d) => d.id === card.action);
       const group = def?.group ?? 'turn';
       const fill = CARD_FILL[card.action];
+      const emoji = CARD_EMOJI[card.action];
       return {
         band: fill ?? BAND[group],
         ...(fill !== undefined ? { fill } : {}),
+        ...(emoji !== undefined ? { emoji } : {}),
         kind: group === 'defense' ? S.kindDefense : S.kindAction,
         name: def?.name ?? '',
         sub: def && 'amount' in def && def.amount !== undefined ? S.amount(def.amount) : '',

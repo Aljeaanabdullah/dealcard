@@ -31,6 +31,11 @@ export function CardView({ card, width, height, selected = false, description, o
         {info.kind}
       </Text>
       <View style={styles.nameBox}>
+        {info.emoji !== undefined ? (
+          <Text style={[styles.emoji, { fontSize: nameSize * 1.25 }, filled && styles.onFill]} numberOfLines={1}>
+            {info.emoji}
+          </Text>
+        ) : null}
         <Text
           style={[styles.name, { fontSize: nameSize }, filled && styles.onFill]}
           numberOfLines={2}
@@ -130,6 +135,10 @@ const styles = StyleSheet.create({
   name: {
     color: theme.cardInk,
     fontWeight: '800',
+    textAlign: 'center',
+  },
+  emoji: {
+    color: theme.cardInk,
     textAlign: 'center',
   },
   onFill: {

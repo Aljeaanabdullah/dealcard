@@ -42,6 +42,16 @@ export const CARD_FILL: Partial<Record<ActionId, string>> = {
   estareeh: SET_COLORS.darkBlue,
 };
 
+/** إيموجي يطلع على وجه كرت الأكشن — prd.md القسم 4. */
+export const CARD_EMOJI: Partial<Record<ActionId, string>> = {
+  hayyour: '↕️',
+  malekAmal: '🚫',
+  estareeh: '⛓️',
+};
+
+/** إيموجي كروت الإيجار كلها: إيد ماسكة فلوس. */
+export const RENT_EMOJI = '🤲💵';
+
 /** لون شريط الكرت حسب نوعه. */
 export const BAND = {
   money: '#2E9E5B',

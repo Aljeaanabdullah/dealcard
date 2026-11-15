@@ -102,6 +102,42 @@ describe('ألوان كرت الإيجار', () => {
   });
 });
 
+describe('إيموجي الكروت', () => {
+  it('حيور ومالك امل واستريح وكل كروت الإيجار لها إيموجي، وباقي الكروت بدون', () => {
+    const expected: Record<string, string> = { 'حيور': '↕️', 'مالك امل': '🚫', 'استريح': '⛓️' };
+    let rents = 0;
+    for (const c of buildDeck()) {
+      const info = cardInfo(c);
+      if (c.kind === 'rent') {
+        rents += 1;
+        expect(info.emoji).toBe('🤲💵');
+      } else if (c.kind === 'action') {
+        expect([info.name, info.emoji]).toEqual([info.name, expected[info.name]]);
+      } else {
+        expect(info.emoji).toBeUndefined();
+      }
+    }
+    expect(rents).toBeGreaterThan(0);
+  });
+
+  it('الإيموجي ينرسم على وجه الكرت', () => {
+    const shown = (id: string) => {
+      let renderer: ReactTestRenderer | undefined;
+      act(() => {
+        renderer = create(<CardView card={card(id)} width={70} height={100} />);
+      });
+      if (!renderer) throw new Error('الكرت ما انعرض');
+      return texts(renderer);
+    };
+    expect(shown('action:hayyour:1')).toContain('↕️');
+    expect(shown('action:malekAmal:1')).toContain('🚫');
+    expect(shown('action:estareeh:1')).toContain('⛓️');
+    expect(shown('rent:rentOne:1')).toContain('🤲💵');
+    expect(shown('rent:rentYellowRed:1')).toContain('🤲💵');
+    expect(shown('action:draw2:1').join('')).not.toMatch(/[↕🚫⛓🤲💵]/u);
+  });
+});
+
 describe('كروت بلون كامل', () => {
   const purple = ['راحت عليك', 'حيور', 'حصانه', 'طب وتخير'];
   const blue = ['مالك امل', 'استريح'];
