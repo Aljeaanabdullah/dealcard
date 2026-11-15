@@ -1,5 +1,9 @@
 // اختبارات واجهة: شاشة البداية باللوقو، اختيار الشخصية، والحساب بالإيميل — prd.md الأقسام 6 و 7
 // تشتغل على خدمة حسابات داخل الذاكرة. التسجيل الفعلي على Supabase ما انختبر هنا.
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+import { Image } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 import App from '../../../App';
@@ -7,7 +11,9 @@ import { AVATAR_COUNT, BOT_AVATAR } from '../../data/avatars';
 import type { Account } from '../../net/account';
 import { createMemoryAccount } from '../../net/memoryAccount';
 import { createMemoryHost } from '../../net/memoryHost';
-import { avatarDrawing } from '../avatarShapes';
+import { Avatar } from '../Avatar';
+import { AVATAR_IMAGES, avatarImage } from '../avatarImages';
+import { botDrawing } from '../avatarShapes';
 import { S } from '../strings';
 
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
@@ -84,15 +90,40 @@ describe('شاشة البداية', () => {
 });
 
 describe('الشخصيات', () => {
-  it('كل شخصية لها رسمة مختلفة، والبوت له وجه روبوت', () => {
-    const drawings = Array.from({ length: AVATAR_COUNT }, (_, id) => JSON.stringify(avatarDrawing(id, 100)));
-    expect(new Set(drawings).size).toBe(AVATAR_COUNT);
-    for (let id = 0; id < AVATAR_COUNT; id++) expect(avatarDrawing(id, 100).layers.length).toBeGreaterThan(8);
-    const bot = avatarDrawing(BOT_AVATAR, 100);
+  it('كل شخصية لها صورة مختلفة موجودة داخل التطبيق', () => {
+    const files = Array.from({ length: AVATAR_COUNT }, (_, id) =>
+      readFileSync(join(__dirname, '../../../assets/avatars', `avatar-${String(id).padStart(2, '0')}.png`)).toString('base64'),
+    );
+    expect(new Set(files).size).toBe(AVATAR_COUNT);
+    expect(AVATAR_IMAGES).toHaveLength(AVATAR_COUNT);
+    expect(new Set(AVATAR_IMAGES.map((image) => JSON.stringify(image))).size).toBe(AVATAR_COUNT);
+    // رقم غلط يرجع للشخصية الافتراضية
+    expect(avatarImage(99)).toBe(AVATAR_IMAGES[0]);
+  });
+
+  it('الشخصية تنعرض كصورة، والمقعد اللي ما له شخصية يطلع له وجه روبوت', () => {
+    let renderer: ReactTestRenderer | undefined;
+    act(() => {
+      renderer = create(<Avatar avatar={7} size={100} />);
+    });
+    if (!renderer) throw new Error('الشخصية ما انعرضت');
+    const images = renderer.root.findAllByType(Image);
+    expect(images).toHaveLength(1);
+    expect(images[0]?.props.source).toBe(AVATAR_IMAGES[7]);
+    act(() => renderer?.unmount());
+
+    let botRenderer: ReactTestRenderer | undefined;
+    act(() => {
+      botRenderer = create(<Avatar avatar={BOT_AVATAR} size={100} />);
+    });
+    if (!botRenderer) throw new Error('وجه الروبوت ما انعرض');
+    expect(botRenderer.root.findAllByType(Image)).toHaveLength(0);
+    act(() => botRenderer?.unmount());
+
+    const bot = botDrawing(100);
     expect(bot.layers.map((layer) => layer.key)).toContain('antenna');
-    expect(drawings).not.toContain(JSON.stringify(bot));
     // الرسمة تتكبر مع المقاس
-    expect(avatarDrawing(0, 200).layers[0]?.style.width).toBe((avatarDrawing(0, 100).layers[0]?.style.width ?? 0) * 2);
+    expect(botDrawing(200).layers[0]?.style.width).toBe((bot.layers[0]?.style.width ?? 0) * 2);
   });
 
   it('اللاعب يختار شخصيته من 12 ويدخل فيها غرفة أونلاين', async () => {

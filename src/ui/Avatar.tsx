@@ -1,8 +1,10 @@
-// شخصية اللاعب داخل دائرة — الرسم من avatarShapes.ts
+// شخصية اللاعب داخل دائرة — صورة من avatarImages.ts، والمقعد اللي ما له شخصية يطلع له وجه روبوت مرسوم
 
-import { View } from 'react-native';
+import { Image, View } from 'react-native';
 
-import { avatarDrawing } from './avatarShapes';
+import { BOT_AVATAR } from '../data/avatars';
+import { avatarImage } from './avatarImages';
+import { botDrawing } from './avatarShapes';
 import { theme } from './theme';
 
 interface AvatarProps {
@@ -17,7 +19,7 @@ interface AvatarProps {
 export function Avatar({ avatar, size, selected = false, testID }: AvatarProps) {
   const ring = Math.max(2, Math.round(size * 0.06));
   const inner = size - ring * 2;
-  const drawing = avatarDrawing(avatar, inner);
+  const drawing = avatar === BOT_AVATAR ? botDrawing(inner) : null;
   return (
     <View
       testID={testID}
@@ -28,12 +30,14 @@ export function Avatar({ avatar, size, selected = false, testID }: AvatarProps) 
         borderWidth: ring,
         borderColor: selected ? theme.gold : theme.text,
         overflow: 'hidden',
-        backgroundColor: drawing.background,
+        backgroundColor: drawing?.background ?? theme.panel,
       }}
     >
-      {drawing.layers.map((layer) => (
-        <View key={layer.key} style={layer.style} />
-      ))}
+      {drawing ? (
+        drawing.layers.map((layer) => <View key={layer.key} style={layer.style} />)
+      ) : (
+        <Image source={avatarImage(avatar)} style={{ width: inner, height: inner }} resizeMode="cover" />
+      )}
     </View>
   );
 }
