@@ -46,3 +46,4 @@ yarn-error.*
 !.env.example
 
 design/avatars-trial/
+design/cards-trial/

@@ -1,9 +1,12 @@
 // اختبارات ملاحظات صاحب المشروع على الطاولة:
 // ألوان كرت الإيجار، انتقال الدور تلقائياً، وسهم على اللاعب المستهدف.
-import { StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+import { Image, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { buildDeck, type Card } from '../../data/cards';
+import { buildDeck, BUILDINGS, type Card } from '../../data/cards';
 import { legalMoves, type Move } from '../../engine/moves';
 import type { GameState } from '../../engine/state';
 import { maskStateFor } from '../../net/mask';
@@ -11,6 +14,7 @@ import { giveFullSet, place, readyState, setTurn } from '../../testing/helpers';
 import { cardInfo, LOCAL_NAMING, moveTargets } from '../describe';
 import { TableScreen } from '../TableScreen';
 import { S } from '../strings';
+import { ACTION_ART, BUILDING_ART } from '../cardArt';
 import { CardView } from '../CardView';
 import { SET_COLORS, theme } from '../theme';
 
@@ -102,39 +106,82 @@ describe('ألوان كرت الإيجار', () => {
   });
 });
 
-describe('إيموجي الكروت', () => {
-  it('حيور ومالك امل واستريح وكل كروت الإيجار لها إيموجي، وباقي الكروت بدون', () => {
-    const expected: Record<string, string> = { 'حيور': '↕️', 'مالك امل': '🚫', 'استريح': '⛓️' };
+describe('إيموجي ورسومات الكروت', () => {
+  const shown = (id: string, width = 70, height = 100) => {
+    let renderer: ReactTestRenderer | undefined;
+    act(() => {
+      renderer = create(<CardView card={card(id)} width={width} height={height} />);
+    });
+    if (!renderer) throw new Error('الكرت ما انعرض');
+    return { texts: texts(renderer), images: renderer.root.findAllByType(Image).map((node) => node.props.source as number) };
+  };
+
+  it('كل كروت الإيجار لها إيموجي، وباقي الكروت بدون', () => {
     let rents = 0;
     for (const c of buildDeck()) {
       const info = cardInfo(c);
       if (c.kind === 'rent') {
         rents += 1;
         expect(info.emoji).toBe('🤲💵');
-      } else if (c.kind === 'action') {
-        expect([info.name, info.emoji]).toEqual([info.name, expected[info.name]]);
       } else {
         expect(info.emoji).toBeUndefined();
       }
     }
     expect(rents).toBeGreaterThan(0);
+    expect(shown('rent:rentOne:1').texts).toContain('🤲💵');
+    expect(shown('rent:rentYellowRed:1').texts).toContain('🤲💵');
+    expect(shown('action:draw2:1').texts.join('')).not.toMatch(/[🤲💵]/u);
   });
 
-  it('الإيموجي ينرسم على وجه الكرت', () => {
-    const shown = (id: string) => {
-      let renderer: ReactTestRenderer | undefined;
-      act(() => {
-        renderer = create(<CardView card={card(id)} width={70} height={100} />);
-      });
-      if (!renderer) throw new Error('الكرت ما انعرض');
-      return texts(renderer);
+  it('مالك امل وحيور واستريح وحصانه: رسمة ونص صاحب المشروع تحت الاسم', () => {
+    const expected: Record<string, string> = {
+      'مالك امل': 'العبه ضد أي أكشن (يوقف الأكشن)',
+      'حيور': 'رد أي أكشن على اللاعب الضد',
+      'استريح': 'طوّف دور لاعب انت تختاره',
+      'حصانه': 'ممنوع ينلعب عليك أي أكشن دوره كامله',
     };
-    expect(shown('action:hayyour:1')).toContain('↕️');
-    expect(shown('action:malekAmal:1')).toContain('🚫');
-    expect(shown('action:estareeh:1')).toContain('⛓️');
-    expect(shown('rent:rentOne:1')).toContain('🤲💵');
-    expect(shown('rent:rentYellowRed:1')).toContain('🤲💵');
-    expect(shown('action:draw2:1').join('')).not.toMatch(/[↕🚫⛓🤲💵]/u);
+    const seen = new Set<string>();
+    for (const c of buildDeck()) {
+      if (c.kind !== 'action') continue;
+      const info = cardInfo(c);
+      const text = expected[info.name];
+      if (text === undefined) {
+        expect([info.name, info.art]).toEqual([info.name, undefined]);
+      } else {
+        seen.add(info.name);
+        expect(info.art).toBe(ACTION_ART[c.action]);
+        expect(info.art).toBeDefined();
+        expect(info.sub).toBe(text);
+        expect(info.badge).toBeUndefined();
+      }
+    }
+    expect([...seen].sort()).toEqual(Object.keys(expected).sort());
+
+    const drawn = shown('action:hasanah:1');
+    expect(drawn.images).toEqual([ACTION_ART.hasanah]);
+    expect(drawn.texts).toContain('ممنوع ينلعب عليك أي أكشن دوره كامله');
+    expect(shown('action:draw2:1').images).toEqual([]);
+  });
+
+  it('المباني: كل مبنى له رسمته ونص زيادة الإيجار وعلامة الزيادة من بيانات الكروت', () => {
+    const arts = new Set<string>();
+    for (const def of BUILDINGS) {
+      const info = cardInfo(card(`building:${def.id}:1`));
+      expect(info.art).toBe(BUILDING_ART[def.id]);
+      arts.add(JSON.stringify(info.art));
+      expect(info.sub).toBe('يزيد قيمة الإيجار حق الطقم الكامل');
+      expect(info.badge).toBe(`+${def.rentBonus}`);
+      const drawn = shown(`building:${def.id}:1`);
+      expect(drawn.images).toEqual([BUILDING_ART[def.id]]);
+      expect(drawn.texts).toEqual(expect.arrayContaining([def.name, info.sub, `+${def.rentBonus}`]));
+    }
+    expect(arts.size).toBe(BUILDINGS.length);
+  });
+
+  it('ملفات الرسومات موجودة داخل التطبيق وكل وحدة مختلفة', () => {
+    const names = ['malekAmal', 'hayyour', 'estareeh', 'hasanah', 'resort', 'chalet', 'plot', 'apartments'];
+    const files = names.map((name) => readFileSync(join(__dirname, '../../../assets/cards', `${name}.png`)).toString('base64'));
+    expect(new Set(files).size).toBe(names.length);
   });
 });
 

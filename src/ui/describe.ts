@@ -10,7 +10,8 @@ import type { Move } from '../engine/moves';
 import { cardValue, rentFor } from '../engine/payment';
 import type { Effect, GameState } from '../engine/state';
 import { S } from './strings';
-import { BAND, CARD_EMOJI, CARD_FILL, RENT_EMOJI, SET_COLORS } from './theme';
+import { ACTION_ART, BUILDING_ART } from './cardArt';
+import { BAND, CARD_FILL, RENT_EMOJI, SET_COLORS } from './theme';
 
 /** مقعد اللاعب باللعب المحلي ضد البوتات. */
 export const HUMAN_SEAT = 0;
@@ -75,6 +76,10 @@ export interface CardInfo {
   readonly fill?: string;
   /** إيموجي يطلع على وجه الكرت فوق الاسم */
   readonly emoji?: string;
+  /** رسمة الكرت (صورة من assets/cards) تطلع بوسطه فوق الاسم */
+  readonly art?: number;
+  /** علامة صغيرة بزاوية الكرت (زيادة إيجار المبنى) */
+  readonly badge?: string;
   readonly kind: string;
   readonly name: string;
   readonly sub: string;
@@ -96,7 +101,14 @@ export function cardInfo(card: Card): CardInfo {
       return { band: BAND.money, kind: S.kindMoney, name: String(card.value), sub: S.dinar };
     case 'building': {
       const def = BUILDINGS.find((d) => d.id === card.building);
-      return { band: BAND.building, kind: S.kindBuilding, name: def?.name ?? '', sub: S.rentBonus(def?.rentBonus ?? 0) };
+      return {
+        band: BAND.building,
+        art: BUILDING_ART[card.building],
+        badge: S.rentBonusBadge(def?.rentBonus ?? 0),
+        kind: S.kindBuilding,
+        name: def?.name ?? '',
+        sub: S.buildingEffect,
+      };
     }
     case 'rent': {
       const def = RENTS.find((d) => d.id === card.rent);
@@ -126,14 +138,15 @@ export function cardInfo(card: Card): CardInfo {
       const def = ACTIONS.find((d) => d.id === card.action);
       const group = def?.group ?? 'turn';
       const fill = CARD_FILL[card.action];
-      const emoji = CARD_EMOJI[card.action];
+      const art = ACTION_ART[card.action];
       return {
         band: fill ?? BAND[group],
         ...(fill !== undefined ? { fill } : {}),
-        ...(emoji !== undefined ? { emoji } : {}),
+        ...(art !== undefined ? { art } : {}),
         kind: group === 'defense' ? S.kindDefense : S.kindAction,
         name: def?.name ?? '',
-        sub: def && 'amount' in def && def.amount !== undefined ? S.amount(def.amount) : '',
+        // الكرت اللي عليه رسمة ينكتب تحته وش يسوي.
+        sub: art !== undefined ? (S.effect[card.action] ?? '') : def && 'amount' in def && def.amount !== undefined ? S.amount(def.amount) : '',
       };
     }
   }
